@@ -6,6 +6,15 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-01
+
+### Fixed
+
+- Categories stay grouped in catalog order: a category that moved to another
+  group (like health insurance to Insurance) no longer leaves that group in two
+  places in lists and the Plan grid.
+- "From average…" counts budgets, with variable categories per group.
+
 ## [2.1.0] - 2026-10-01
 
 ### Changed
@@ -72,5 +81,6 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.1.1]: https://github.com/mikepage/fin/releases/tag/v2.1.1
 [2.1.0]: https://github.com/mikepage/fin/releases/tag/v2.1.0
 [2.0.0]: https://github.com/mikepage/fin/releases/tag/v2.0.0

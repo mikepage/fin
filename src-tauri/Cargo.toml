@@ -1,6 +1,6 @@
 [package]
 name = "fin"
-version = "2.1.0"
+version = "2.1.1"
 description = "Fin, personal finance"
 authors = ["Mike Page"]
 edition = "2021"

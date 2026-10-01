@@ -2529,7 +2529,15 @@ fn BudgetPage() -> impl IntoView {
                     .map(|(_, v)| v)
                     .sum();
                 let total: i64 = p.iter().map(|(_, v)| v).sum();
-                (p.len(), income, total - income)
+                // Budgets, not categories: variable categories land on their group's.
+                let mut budgets: Vec<String> = p
+                    .iter()
+                    .filter_map(|(id, _)| d.category(Some(id)))
+                    .map(|c| if c.kind == CategoryKind::Variable { format!("group:{}", c.group) } else { c.id.clone() })
+                    .collect();
+                budgets.sort();
+                budgets.dedup();
+                (budgets.len(), income, total - income)
             })
         });
         if count == 0 {
@@ -2537,8 +2545,8 @@ fn BudgetPage() -> impl IntoView {
         }
         tn!(
             count,
-            "{} category gets its average every month: together € {} spending and € {} income per month, rounded to whole euros.",
-            "{} categories get their average every month: together € {} spending and € {} income per month, rounded to whole euros.",
+            "{} budget gets its average every month (variable categories per group): together € {} spending and € {} income per month, rounded to whole euros.",
+            "{} budgets get their average every month (variable categories per group): together € {} spending and € {} income per month, rounded to whole euros.",
             count,
             budget_text(expense),
             budget_text(income)

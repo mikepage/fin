@@ -233,7 +233,27 @@ fn ensure_system_categories(ds: &mut Dataset) {
         }
     }
     follow_group_names(ds, l);
+    order_by_group(ds, l);
     ensure_default_rules(ds, locale::nl_nl());
+}
+
+/// Keeps the list grouped in catalog order (a category moved to another group lands
+/// with it): standard groups first, as the catalog has them, then the user's own groups
+/// in the order they appear. Within a group the order stays as it is.
+fn order_by_group(ds: &mut Dataset, l: &Locale) {
+    let mut groups: Vec<String> = Vec::new();
+    for &(_, group_key, _) in catalog::CATALOG {
+        let name = l.group_name(group_key).to_string();
+        if !groups.contains(&name) {
+            groups.push(name);
+        }
+    }
+    for c in &ds.categories {
+        if !groups.contains(&c.group) {
+            groups.push(c.group.clone());
+        }
+    }
+    ds.categories.sort_by_key(|c| groups.iter().position(|g| *g == c.group));
 }
 
 /// The user's own categories in a standard group get that group's name in the current
@@ -1554,6 +1574,30 @@ mod tests {
         let mut own = ds.categories.iter().find(|c| c.name == "Eigen").unwrap().clone();
         own.kind = Variable;
         update_category(&mut ds, own).unwrap();
+    }
+
+    #[test]
+    fn categories_stay_grouped_in_catalog_order() {
+        let mut ds = default_dataset();
+        // An older file had health insurance under Medical costs, after the
+        // household categories, and a category of the user's own group in between.
+        let i = ds.categories.iter().position(|c| c.id == ids::HEALTH_INSURANCE).unwrap();
+        let health = ds.categories.remove(i);
+        ds.categories.insert(0, health);
+        ds.categories.insert(1, Category { id: "own".into(), name: "Hobby".into(), group: "Eigen".into(), kind: CategoryKind::Variable, ..Default::default() });
+        ensure_system_categories(&mut ds);
+        let groups: Vec<&str> = ds.categories.iter().map(|c| c.group.as_str()).collect();
+        let mut seen: Vec<&str> = Vec::new();
+        for g in &groups {
+            if seen.last() != Some(g) {
+                assert!(!seen.contains(g), "{g} appears in two places");
+                seen.push(g);
+            }
+        }
+        assert_eq!(*seen.last().unwrap(), "Eigen", "the user's own group comes after the standard ones");
+        let insurance = ds.category(Some(ids::HEALTH_INSURANCE)).unwrap().group.clone();
+        let first_insurance = groups.iter().position(|g| *g == insurance).unwrap();
+        assert!(groups[first_insurance..].iter().take_while(|g| **g == insurance).count() > 1, "health insurance sits with the other insurances");
     }
 
     #[test]

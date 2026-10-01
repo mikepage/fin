@@ -285,12 +285,12 @@ pub const UI: &[(&str, &str)] = &[
     // Budget
     ("No transactions in this period to take an average from.", "Geen transacties in deze periode om een gemiddelde uit te berekenen."),
     (
-        "{} category gets its average every month: together € {} spending and € {} income per month, rounded to whole euros.",
-        "{} categorie krijgt elke maand het gemiddelde: samen € {} uitgaven en € {} inkomsten per maand, afgerond op hele euro's.",
+        "{} budget gets its average every month (variable categories per group): together € {} spending and € {} income per month, rounded to whole euros.",
+        "{} budget krijgt elke maand het gemiddelde (variabele categorieën per groep): samen € {} uitgaven en € {} inkomsten per maand, afgerond op hele euro's.",
     ),
     (
-        "{} categories get their average every month: together € {} spending and € {} income per month, rounded to whole euros.",
-        "{} categorieën krijgen elke maand hun gemiddelde: samen € {} uitgaven en € {} inkomsten per maand, afgerond op hele euro's.",
+        "{} budgets get their average every month (variable categories per group): together € {} spending and € {} income per month, rounded to whole euros.",
+        "{} budgetten krijgen elke maand hun gemiddelde (variabele categorieën per groep): samen € {} uitgaven en € {} inkomsten per maand, afgerond op hele euro's.",
     ),
     ("{} budget filled in from the average of {} months.", "{} budget ingevuld uit het gemiddelde van {} maanden."),
     ("{} budgets filled in from the average of {} months.", "{} budgetten ingevuld uit het gemiddelde van {} maanden."),
