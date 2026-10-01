@@ -6,6 +6,21 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-01
+
+### Changed
+
+- The Year result tab adds up from top to bottom: the budgeted result, the months
+  so far against their budget (the same total as Result per month), what the rest
+  of the year adds without a budget, the expected result, then extra income,
+  investments and the expected net. Below it the tiles' two outcomes and the
+  result per month.
+
+### Removed
+
+- The Year forecast tab: its columns told the same year in four ways that didn't
+  visibly add up. The Budget page has two tabs, Year result and Plan.
+
 ## [2.1.4] - 2026-10-01
 
 ### Changed
@@ -108,6 +123,7 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.2.0]: https://github.com/mikepage/fin/releases/tag/v2.2.0
 [2.1.4]: https://github.com/mikepage/fin/releases/tag/v2.1.4
 [2.1.3]: https://github.com/mikepage/fin/releases/tag/v2.1.3
 [2.1.2]: https://github.com/mikepage/fin/releases/tag/v2.1.2

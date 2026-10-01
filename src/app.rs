@@ -933,6 +933,8 @@ fn forecast_from(year: i32) -> String {
 #[derive(Clone, PartialEq)]
 struct Plannable {
     budget: [i64; 4],
+    /// The budget of the complete months only, to set the actuals against.
+    budget_so_far: [i64; 4],
     actual: [i64; 4],
     elapsed: usize,
     expected: [i64; 4],
@@ -946,6 +948,7 @@ struct Plannable {
 fn plannable_year(d: &Dataset, y: i32) -> Plannable {
     let elapsed = complete_months(y);
     let mut budget = [0i64; 4];
+    let mut budget_so_far = [0i64; 4];
     let mut actual = [0i64; 4];
     let (mut extra, mut invested) = (0i64, 0i64);
     let counts = |l: &BudgetLine| match &l.category_id {
@@ -961,6 +964,9 @@ fn plannable_year(d: &Dataset, y: i32) -> Plannable {
         if m > elapsed {
             continue;
         }
+        budget_so_far[0] += o.budget.income;
+        budget_so_far[1] += o.budget.fixed;
+        budget_so_far[2] += o.budget.variable;
         let before = actual[0];
         for (i, lines) in [&o.income, &o.fixed, &o.variable].into_iter().enumerate() {
             for l in lines.iter().filter(|l| counts(l)) {
@@ -982,7 +988,7 @@ fn plannable_year(d: &Dataset, y: i32) -> Plannable {
         fc
     };
     let (expected, at_pace) = (add(year_forecast(d, y)), add(year_forecast_at_pace(d, y)));
-    Plannable { budget, actual, elapsed, expected, at_pace, extra, invested }
+    Plannable { budget, budget_so_far, actual, elapsed, expected, at_pace, extra, invested }
 }
 
 /// The plannable result: income minus fixed and variable.
@@ -990,62 +996,44 @@ fn plan_result(v: &[i64; 4]) -> i64 {
     v[0] - v[1] - v[2]
 }
 
-/// "Year forecast": what the year's income leaves for variable spending, in yearly
-/// figures: budgeted, actual so far and expected, plannable categories only.
+/// How the year adds up, top to bottom: the budgeted result, how far the complete
+/// months are from their budget (Result per month's cumulative total), what the rest of
+/// the year adds beyond its budget (spending without one, at its average), the expected
+/// result, then extra income and investments as far as they happened, and the net.
 #[component]
-fn Affordability(year: RwSignal<i32>) -> impl IntoView {
+fn YearSummary(year: RwSignal<i32>) -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    // [income, fixed, variable, investment]: budgeted for the year, actual per month so far.
     let figures = Memo::new(move |_| ctx.data.with(|d| plannable_year(d, year.get())));
-    // Columns: 0 budgeted, 1 actual so far, 2 expected at budget, 3 expected at pace.
-    fn col(f: &Plannable, i: usize) -> [i64; 4] {
-        *[&f.budget, &f.actual, &f.expected, &f.at_pace][i]
-    }
-    // A plain table row; totals (result, net) bold. Extra income and investments have no
-    // budget, so the budget column shows none for them.
-    let row = move |label: &'static str, total: bool, pick: fn(&Plannable, usize) -> Option<i64>| {
-        view! {
-            <tr class:total=total>
-                <td>{label}</td>
-                {(0..4).map(|i| view! {
-                    <td>{move || figures.with(|f| pick(f, i)).map(|v| format!("€ {}", whole_euros(v))).unwrap_or_else(|| "–".into())}</td>
-                }).collect_view()}
-            </tr>
-        }
+    let signed = |c: i64| if c >= 0 { format!("+{}", whole_euros(c)) } else { format!("−{}", whole_euros(-c)) };
+    let row = move |label: String, total: bool, value: i64| {
+        view! { <tr class:total=total><td>{label}</td><td>{signed(value)}</td></tr> }
     };
-    // What keeping to the budget is worth against the current pace.
-    let room = move || figures.with(|f| plan_result(&f.expected) - plan_result(&f.at_pace));
     view! {
         <section class="panel table-card">
-            <div class="section-head">
-                <h2>{t!("Year forecast")}" "{move || year.get()}</h2>
-            </div>
             <table class="data-table">
-                <thead><tr>
-                    <th></th>
-                    <th>{t!("Budgeted per year")}</th>
-                    <th>{move || figures.with(|f| match f.elapsed {
-                        12 => t!("Actual").to_string(),
-                        0 => t!("Actual (no full month yet)").to_string(),
-                        n => t!("Actual through {}", i18n::month_short(n - 1)),
-                    })}</th>
-                    <th title=t!("Actual so far, then as budgeted")>{t!("Expected (budget)")}</th>
-                    <th title=t!("Actual so far, then variable spending at the average of the last six months")>{t!("Expected (pace)")}</th>
-                </tr></thead>
                 <tbody>
-                    {row(t!("Fixed income"), false, move |f, i| Some(col(f, i)[0]))}
-                    {row(t!("Fixed costs"), false, move |f, i| Some(-col(f, i)[1]))}
-                    {row(t!("Discretionary"), false, move |f, i| Some(col(f, i)[0] - col(f, i)[1]))}
-                    {row(t!("Variable"), false, move |f, i| Some(-col(f, i)[2]))}
-                    {row(t!("Result"), true, move |f, i| Some(plan_result(&col(f, i))))}
-                    {row(t!("Extra income"), false, |f, i| (i > 0).then_some(f.extra))}
-                    {row(t!("Investments"), false, |f, i| (i > 0).then_some(-f.invested))}
-                    {row(t!("Net"), true, move |f, i| Some(plan_result(&col(f, i)) + if i > 0 { f.extra - f.invested } else { 0 }))}
+                    {move || figures.with(|f| {
+                        let budgeted = plan_result(&f.budget);
+                        let so_far = plan_result(&f.actual) - plan_result(&f.budget_so_far);
+                        let expected = plan_result(&f.expected);
+                        // What the months to come add beyond their budget.
+                        let rest = expected - budgeted - so_far;
+                        let so_far_label = match f.elapsed {
+                            0 => t!("So far against budget").to_string(),
+                            n => t!("{} against budget", format!("{} – {}", i18n::month_short(0), i18n::month_short(n - 1))),
+                        };
+                        view! {
+                            {row(t!("Budgeted result").to_string(), false, budgeted)}
+                            {row(so_far_label, false, so_far)}
+                            {(rest != 0).then(|| row(t!("Rest of the year, without a budget").to_string(), false, rest))}
+                            {row(t!("Expected result").to_string(), true, expected)}
+                            {row(t!("Extra income").to_string(), false, f.extra)}
+                            {row(t!("Investments").to_string(), false, -f.invested)}
+                            {row(t!("Expected net").to_string(), true, expected + f.extra - f.invested)}
+                        }
+                    })}
                 </tbody>
             </table>
-            {move || (room() > 0 && figures.with(|f| f.elapsed < 12)).then(|| view! {
-                <p class="hint">{t!("Keeping to the budget is worth {} against the current pace.", format!("€ {}", whole_euros(room())))}</p>
-            })}
         </section>
     }
 }
@@ -1065,18 +1053,10 @@ fn ForecastTiles(year: RwSignal<i32>) -> impl IntoView {
             </div>
         }
     };
-    let signed = |c: i64| if c >= 0 { format!("+{}", whole_euros(c)) } else { format!("−{}", whole_euros(-c)) };
-    // The year at budget adds up: the budgeted result plus how far the months so far
-    // are ahead of or behind their budget (Result per month's running total).
-    let budget_note = move || {
-        figures.with(|f| {
-            let budgeted = plan_result(&f.budget);
-            t!("budgeted {} · {} so far against budget", signed(budgeted), signed(plan_result(&f.expected) - budgeted)).to_string()
-        })
-    };
+    // How it adds up is in the table under the tiles.
     view! {
         <section class="sum-cards">
-            {tile(t!("Year result at budget"), Box::new(budget_note), |f| plan_result(&f.expected))}
+            {tile(t!("Year result at budget"), Box::new(|| t!("actual so far, then the budget").to_string()), |f| plan_result(&f.expected))}
             {tile(t!("At the current pace"), Box::new(|| t!("if variable spending stays as it is").to_string()), |f| plan_result(&f.at_pace))}
         </section>
     }
@@ -2498,7 +2478,6 @@ fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
 #[derive(Clone, Copy, PartialEq)]
 enum BudgetTab {
     Result,
-    Year,
     Plan,
 }
 
@@ -2774,7 +2753,6 @@ fn BudgetPage() -> impl IntoView {
             <div class="segmented" role="group" aria-label=t!("Budget")>
                 {[
                     (BudgetTab::Result, t!("Year result")),
-                    (BudgetTab::Year, t!("Year forecast")),
                     (BudgetTab::Plan, t!("Plan")),
                 ]
                 .into_iter()
@@ -2786,10 +2764,8 @@ fn BudgetPage() -> impl IntoView {
         </div>
         <Show when=move || tab.get() == BudgetTab::Result>
             <ForecastTiles year=year/>
+            <YearSummary year=year/>
             <ResultByMonth year=year/>
-        </Show>
-        <Show when=move || tab.get() == BudgetTab::Year>
-            <Affordability year=year/>
         </Show>
         <Show when=planning>
         <Show when=move || avg_open.get()>
