@@ -283,6 +283,21 @@ fn export_backup<R: tauri::Runtime>(app: tauri::AppHandle<R>, state: State<AppSt
     Ok(path.display().to_string())
 }
 
+/// Saves a report as CSV in the Downloads folder: `name` (letters, digits, `-`, `_` and
+/// spaces; anything else becomes `-`) plus `.csv`. Returns the path.
+#[tauri::command]
+fn export_csv<R: tauri::Runtime>(app: tauri::AppHandle<R>, name: String, content: String) -> CmdResult<String> {
+    let name: String = name.chars().map(|c| if c.is_alphanumeric() || matches!(c, '-' | '_' | ' ') { c } else { '-' }).collect();
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Invalid file name".into());
+    }
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{name}.csv"));
+    std::fs::write(&path, content).map_err(|e| format!("Save failed: {e}"))?;
+    Ok(path.display().to_string())
+}
+
 fn with_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder.invoke_handler(tauri::generate_handler![
             get_data,
@@ -311,6 +326,7 @@ fn with_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builde
             restore_backup,
             restore_backup_file,
             export_backup,
+            export_csv,
             set_budget,
             set_group_budget,
             copy_budgets_from_previous_year,

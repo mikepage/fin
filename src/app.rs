@@ -190,10 +190,6 @@ fn euro_text(cents: i64) -> String {
     format!("€ {}", budget_text(cents))
 }
 
-/// Rounded to whole euros, without the € sign: `12.811`.
-fn whole_euros(cents: i64) -> String {
-    i18n::whole((cents + 50).div_euclid(100) * 100)
-}
 
 /// A line's name; the line for money without a category in the app's language.
 fn line_name(category_id: Option<&str>, name: &str) -> String {
@@ -629,7 +625,7 @@ impl Report {
         match self {
             Report::Expenses => kind.is_expense(),
             Report::Income => kind.is_income(),
-            Report::Saldo => kind.counts(),
+            Report::Saldo | Report::Budget => kind.counts(),
         }
     }
 }
@@ -755,6 +751,8 @@ enum Report {
     Expenses,
     Income,
     Saldo,
+    /// The result per month against the budgeted result.
+    Budget,
 }
 
 /// Trends through a year: expenses, income or the net, one bar per month, over the
@@ -775,12 +773,26 @@ fn ReportsPage() -> impl IntoView {
     let series = move || match report.get() {
         Report::Expenses => ReportSeries::ExpensesTotal,
         Report::Income => ReportSeries::IncomeTotal,
-        Report::Saldo => ReportSeries::Saldo,
+        Report::Saldo | Report::Budget => ReportSeries::Saldo,
     };
     let this_month_c = this_month.clone();
     let points = Signal::derive(move || {
         let y = year.get();
         let months: Vec<String> = (1..=12).map(|m| format!("{y:04}-{m:02}")).collect();
+        if report.get() == Report::Budget {
+            // Only complete months: one just begun isn't against its budget yet.
+            let done = complete_months(y);
+            return ctx.data.with(|d| {
+                months
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, month)| {
+                        let cents = result_against_budget(d, &month, i < done);
+                        crate::charts::MonthPoint { month, cents, forecast: None, pace: None }
+                    })
+                    .collect::<Vec<_>>()
+            });
+        }
         let values = exclude.with(|ex| ctx.data.with(|d| d.report_series_filtered(&months, &series(), channel.get(), ex)));
         months
             .into_iter()
@@ -794,7 +806,7 @@ fn ReportsPage() -> impl IntoView {
     let tone = Signal::derive(move || match report.get() {
         Report::Expenses => crate::charts::Tone::Expense,
         Report::Income => crate::charts::Tone::Income,
-        Report::Saldo => crate::charts::Tone::Signed,
+        Report::Saldo | Report::Budget => crate::charts::Tone::Signed,
     });
     let label = Signal::derive(move || {
         let r = report.get();
@@ -803,9 +815,10 @@ fn ReportsPage() -> impl IntoView {
             Report::Saldo => t!("Net"),
             Report::Expenses => t!("Expenses"),
             Report::Income => t!("Income"),
+            Report::Budget => t!("Result against budget"),
         };
         match (r, sel) {
-            (Report::Saldo, None) => name.to_string(),
+            (Report::Saldo | Report::Budget, _) => name.to_string(),
             (_, s) => format!("{name} · {}", s.unwrap_or_else(|| t!("total").into())),
         }
     });
@@ -837,21 +850,46 @@ fn ReportsPage() -> impl IntoView {
     let tab_on = move |r: Report| report.get() == r;
     let (this_year_so_far, whole_year) = (t!("This year so far"), t!("Whole year"));
     let (highest, lowest) = (t!("Highest month"), t!("Lowest month"));
+    // The chart's months as CSV in Downloads: semicolons and decimal commas, as Dutch
+    // spreadsheets read them; months still to come are left empty.
+    let exported = RwSignal::new(None::<String>);
+    let export_csv = move |_| {
+        let name = format!("Fin {} {}", label.get_untracked(), year.get_untracked());
+        let mut csv = format!("{};{}\n", t!("Month"), label.get_untracked());
+        for p in points.get_untracked() {
+            let amount = p.cents.map(|c| format!("{}{},{:02}", if c < 0 { "-" } else { "" }, c.abs() / 100, c.abs() % 100)).unwrap_or_default();
+            csv.push_str(&format!("{};{}\n", month_label(&p.month), amount));
+        }
+        spawn_local(async move {
+            match api::export_csv(name, csv).await {
+                Ok(path) => exported.set(Some(t!("Saved: {}", path))),
+                Err(e) => ctx.error.set(Some(e)),
+            }
+        });
+    };
 
     view! {
         <header class="page-head">
             <button class="round" aria-label=t!("Previous year") on:click=move |_| year.update(|y| *y -= 1)>"‹"</button>
             <h1 class="year">{t!("Reports")}" "{move || year.get()}</h1>
             <button class="round" aria-label=t!("Next year") on:click=move |_| year.update(|y| *y += 1)>"›"</button>
+            <div class="spacer"></div>
+            <button title=t!("Save this report's months as a CSV file in Downloads") on:click=export_csv>{t!("Export CSV")}</button>
         </header>
+        {move || exported.get().map(|m| view! { <p class="hint">{m}</p> })}
         <div class="filters">
             <div class="segmented" role="group" aria-label=t!("Report")>
                 <button class:on=move || tab_on(Report::Expenses) aria-pressed=move || tab_on(Report::Expenses).to_string() on:click=move |_| pick_report(Report::Expenses)>{t!("Expenses")}</button>
                 <button class:on=move || tab_on(Report::Income) aria-pressed=move || tab_on(Report::Income).to_string() on:click=move |_| pick_report(Report::Income)>{t!("Income")}</button>
+                <button class:on=move || tab_on(Report::Budget) aria-pressed=move || tab_on(Report::Budget).to_string() on:click=move |_| pick_report(Report::Budget)>{t!("Budget")}</button>
             </div>
-            <CategoryFilter exclude=exclude report=report/>
-            <ChannelSelect channel=channel/>
+            // The budget report has no category or channel to filter on.
+            <Show when=move || !tab_on(Report::Budget)>
+                <CategoryFilter exclude=exclude report=report/>
+                <ChannelSelect channel=channel/>
+            </Show>
         </div>
+        <Show when=move || !tab_on(Report::Budget)>
         <section class="panel totals report-totals">
             <span></span>
             <span class="t-head">{move || if year.get() == this_year { this_year_so_far } else { whole_year }}</span>
@@ -864,12 +902,17 @@ fn ReportsPage() -> impl IntoView {
             <span class="t-cell">{move || stats().2.map(|(m, c)| format!("{} · {}", month_short(&m), euro(c))).unwrap_or_else(|| "–".into())}</span>
             <span class="t-cell">{move || stats().3.map(|(m, c)| format!("{} · {}", month_short(&m), euro(c))).unwrap_or_else(|| "–".into())}</span>
         </section>
+        </Show>
         <section class=move || format!("panel chart-panel {}", single_tone())>
             <div class="section-head">
                 <h2>{move || label.get()}</h2>
-                <span class="muted">{t!("Per month, with the average as a line")}</span>
+                <span class="muted">{move || if tab_on(Report::Budget) {
+                    t!("Per complete month: up is better than budgeted, down worse")
+                } else {
+                    t!("Per month, with the average as a line")
+                }}</span>
             </div>
-            <crate::charts::MonthlyBarChart points=points tone=tone label=label/>
+            <crate::charts::MonthlyBarChart points=points tone=tone label=label plain=Signal::derive(move || tab_on(Report::Budget))/>
         </section>
         <details class="panel table-view">
             <summary>{t!("As a table")}</summary>
@@ -907,12 +950,6 @@ fn year_forecast(d: &Dataset, year: i32) -> Vec<fin_shared::MonthForecast> {
     d.forecast(year, &forecast_from(year))
 }
 
-/// The same, with the months to come at the current pace of variable spending
-/// (the average of the last six complete months) instead of the budget.
-fn year_forecast_at_pace(d: &Dataset, year: i32) -> Vec<fin_shared::MonthForecast> {
-    d.forecast_at_pace(year, &forecast_from(year), &today()[..7])
-}
-
 /// The first month of `year` that is forecast rather than actual.
 fn forecast_from(year: i32) -> String {
     let now = today();
@@ -924,231 +961,19 @@ fn forecast_from(year: i32) -> String {
     }
 }
 
-/// A year's plannable figures as [income, fixed, variable, unused]: budgeted for the
-/// year, actual over the complete months, and expected (those actuals plus the
-/// forecast for the rest, once at budget and once at the current pace of variable
-/// spending), with the number of complete months. Plannable means budgetable
-/// categories only (Category::budgetable): no investments, no extra income;
-/// uncategorised spending counts, uncategorised money received doesn't.
-#[derive(Clone, PartialEq)]
-struct Plannable {
-    budget: [i64; 4],
-    /// The budget of the complete months only, to set the actuals against.
-    budget_so_far: [i64; 4],
-    actual: [i64; 4],
-    elapsed: usize,
-    expected: [i64; 4],
-    at_pace: [i64; 4],
-    /// Outside the plan, over the complete months: extra income (holiday pay, refunds,
-    /// uncategorised money received) and investments.
-    extra: i64,
-    invested: i64,
-}
-
-fn plannable_year(d: &Dataset, y: i32) -> Plannable {
-    let elapsed = complete_months(y);
-    let mut budget = [0i64; 4];
-    let mut budget_so_far = [0i64; 4];
-    let mut actual = [0i64; 4];
-    let (mut extra, mut invested) = (0i64, 0i64);
-    let counts = |l: &BudgetLine| match &l.category_id {
-        Some(id) => d.category(Some(id)).is_some_and(|c| c.budgetable()),
-        None => l.kind != CategoryKind::Income,
-    };
-    for m in 1..=12 {
-        let o = d.budget_overview(&format!("{y:04}-{m:02}"));
-        // The overview's totals count a group budget once instead of the budgets inside it.
-        budget[0] += o.budget.income;
-        budget[1] += o.budget.fixed;
-        budget[2] += o.budget.variable;
-        if m > elapsed {
-            continue;
-        }
-        budget_so_far[0] += o.budget.income;
-        budget_so_far[1] += o.budget.fixed;
-        budget_so_far[2] += o.budget.variable;
-        let before = actual[0];
-        for (i, lines) in [&o.income, &o.fixed, &o.variable].into_iter().enumerate() {
-            for l in lines.iter().filter(|l| counts(l)) {
-                actual[i] += l.actual_cents;
-            }
-        }
-        // Income that isn't plannable is extra.
-        extra += o.actual.income - (actual[0] - before);
-        invested += o.actual.investment;
+/// One month's result against its budget: fixed income minus fixed and variable costs,
+/// without extra income and investments, minus the budgeted result. None for a month
+/// that isn't complete yet.
+fn result_against_budget(d: &Dataset, month: &str, complete: bool) -> Option<i64> {
+    if !complete {
+        return None;
     }
-    // The forecast only has budgeted kinds, so it adds to the plannable actuals.
-    let add = |months: Vec<fin_shared::MonthForecast>| {
-        let mut fc = actual;
-        for m in months.iter().filter(|m| !m.actual) {
-            fc[0] += m.totals.income;
-            fc[1] += m.totals.fixed;
-            fc[2] += m.totals.variable;
-        }
-        fc
-    };
-    let (expected, at_pace) = (add(year_forecast(d, y)), add(year_forecast_at_pace(d, y)));
-    Plannable { budget, budget_so_far, actual, elapsed, expected, at_pace, extra, invested }
+    let o = d.budget_overview(month);
+    let fixed_income: i64 = o.income.iter().filter(|l| l.kind == CategoryKind::Income && l.category_id.is_some()).map(|l| l.actual_cents).sum();
+    let (a, b) = (o.actual, o.budget);
+    Some((fixed_income - a.fixed - a.variable) - (b.income - b.fixed - b.variable))
 }
 
-/// The plannable result: income minus fixed and variable.
-fn plan_result(v: &[i64; 4]) -> i64 {
-    v[0] - v[1] - v[2]
-}
-
-/// How the year adds up, top to bottom: the budgeted result, how far the complete
-/// months are from their budget (Result per month's cumulative total), what the rest of
-/// the year adds beyond its budget (spending without one, at its average), the expected
-/// result, then extra income and investments as far as they happened, and the net.
-#[component]
-fn YearSummary(year: RwSignal<i32>) -> impl IntoView {
-    let ctx = expect_context::<Ctx>();
-    let figures = Memo::new(move |_| ctx.data.with(|d| plannable_year(d, year.get())));
-    let signed = |c: i64| if c >= 0 { format!("+{}", whole_euros(c)) } else { format!("−{}", whole_euros(-c)) };
-    let row = move |label: String, total: bool, value: i64| {
-        view! { <tr class:total=total><td>{label}</td><td>{signed(value)}</td></tr> }
-    };
-    view! {
-        <section class="panel table-card">
-            <table class="data-table">
-                <tbody>
-                    {move || figures.with(|f| {
-                        let budgeted = plan_result(&f.budget);
-                        let so_far = plan_result(&f.actual) - plan_result(&f.budget_so_far);
-                        let expected = plan_result(&f.expected);
-                        // What the months to come add beyond their budget.
-                        let rest = expected - budgeted - so_far;
-                        let so_far_label = match f.elapsed {
-                            0 => t!("So far against budget").to_string(),
-                            n => t!("{} against budget", format!("{} – {}", i18n::month_short(0), i18n::month_short(n - 1))),
-                        };
-                        view! {
-                            {row(t!("Budgeted result").to_string(), false, budgeted)}
-                            {row(so_far_label, false, so_far)}
-                            {(rest != 0).then(|| row(t!("Rest of the year, without a budget").to_string(), false, rest))}
-                            {row(t!("Expected result").to_string(), true, expected)}
-                            {row(t!("Extra income").to_string(), false, f.extra)}
-                            {row(t!("Investments").to_string(), false, -f.invested)}
-                            {row(t!("Expected net").to_string(), true, expected + f.extra - f.invested)}
-                        }
-                    })}
-                </tbody>
-            </table>
-        </section>
-    }
-}
-
-/// How the year ends, in two tiles: actual so far and then the budget, or actual so
-/// far and then the current pace.
-#[component]
-fn ForecastTiles(year: RwSignal<i32>) -> impl IntoView {
-    let ctx = expect_context::<Ctx>();
-    let figures = Memo::new(move |_| ctx.data.with(|d| plannable_year(d, year.get())));
-    let tile = move |title: &'static str, note: Box<dyn Fn() -> String + Send + Sync>, pick: fn(&Plannable) -> i64| {
-        view! {
-            <div class="sum-card saldo" class:neg=move || figures.with(|f| pick(f)) < 0>
-                <span class="sum-title">{title}</span>
-                <strong class="sum-value">{move || format!("€ {}", whole_euros(figures.with(|f| pick(f))))}</strong>
-                <span class="muted">{move || note()}</span>
-            </div>
-        }
-    };
-    // How it adds up is in the table under the tiles.
-    view! {
-        <section class="sum-cards">
-            {tile(t!("Year result at budget"), Box::new(|| t!("actual so far, then the budget").to_string()), |f| plan_result(&f.expected))}
-            {tile(t!("At the current pace"), Box::new(|| t!("if variable spending stays as it is").to_string()), |f| plan_result(&f.at_pace))}
-        </section>
-    }
-}
-
-/// The plannable result per month against the budgeted result: fixed income minus
-/// fixed and variable costs, without extra income and investments (as in the year
-/// forecast). Bars for how much better or worse than budgeted, with the running
-/// total, then a table.
-#[component]
-fn ResultByMonth(year: RwSignal<i32>) -> impl IntoView {
-    let ctx = expect_context::<Ctx>();
-    // (month, result if the month is complete, budgeted result, budgeted income)
-    let months = Memo::new(move |_| {
-        let y = year.get();
-        let done = complete_months(y);
-        ctx.data.with(|d| {
-            (1..=12)
-                .map(|m| {
-                    let month = format!("{y:04}-{m:02}");
-                    let o = d.budget_overview(&month);
-                    let (a, b) = (o.actual, o.budget);
-                    // Fixed income only: no extra income (holiday pay, refunds) and no
-                    // uncategorised money received, as in the year forecast.
-                    let fixed_income: i64 = o
-                        .income
-                        .iter()
-                        .filter(|l| l.kind == CategoryKind::Income && l.category_id.is_some())
-                        .map(|l| l.actual_cents)
-                        .sum();
-                    let result = (m <= done).then_some(fixed_income - a.fixed - a.variable);
-                    (month, result, b.income - b.fixed - b.variable, b.income)
-                })
-                .collect::<Vec<_>>()
-        })
-    });
-    let points = Signal::derive(move || {
-        months
-            .get()
-            .into_iter()
-            .map(|(month, result, budget, _)| crate::charts::MonthPoint { month, cents: result.map(|r| r - budget), forecast: None, pace: None })
-            .collect::<Vec<_>>()
-    });
-    let label = Signal::derive(move || t!("Against budget").to_string());
-    let signed = |d: i64| if d >= 0 { format!("+{}", whole_euros(d)) } else { format!("−{}", whole_euros(-d)) };
-    view! {
-        <section class="panel chart-panel">
-            <div class="section-head">
-                <h2>{t!("Result per month")}</h2>
-                <span class="muted">{t!("better or worse than budgeted, with the running total")}</span>
-            </div>
-            <crate::charts::MonthlyBarChart points=points tone=Signal::derive(|| crate::charts::Tone::Signed) label=label running=Signal::derive(|| true)/>
-        </section>
-        <section class="panel table-card">
-            <table class="data-table">
-                <thead><tr><th>{t!("Month")}</th><th>{t!("Result")}</th><th>{t!("Budgeted")}</th><th>{t!("Difference")}</th><th>{t!("Cumulative")}</th></tr></thead>
-                <tbody>
-                    {move || {
-                        let mut total = 0i64;
-                        months.get().into_iter().map(|(month, result, budget, income)| {
-                            let diff = result.map(|r| r - budget);
-                            if let Some(d) = diff {
-                                total += d;
-                            }
-                            // Within 2% of the budgeted income counts as on plan, as on the Overview.
-                            let worse = diff.is_some_and(|d| d < 0 && !within_tolerance(d, income));
-                            view! {
-                                <tr>
-                                    <td>{month_label(&month)}</td>
-                                    <td>{result.map(whole_euros).unwrap_or_else(|| "–".into())}</td>
-                                    <td>{whole_euros(budget)}</td>
-                                    <td>{diff.map(|d| {
-                                        // As on the Overview's Net card.
-                                        let text = if d != 0 && !worse && within_tolerance(d, income) {
-                                            t!("as planned").to_string()
-                                        } else if d >= 0 {
-                                            t!("{} better than budgeted", format!("€ {}", whole_euros(d)))
-                                        } else {
-                                            t!("{} worse than budgeted", format!("€ {}", whole_euros(-d)))
-                                        };
-                                        view! { <span class="badge" class:over=worse class:ok=!worse>{text}</span> }
-                                    })}</td>
-                                    <td class:over={diff.is_some() && total < 0}>{diff.map(|_| signed(total)).unwrap_or_else(|| "–".into())}</td>
-                                </tr>
-                            }
-                        }).collect_view()
-                    }}
-                </tbody>
-            </table>
-        </section>
-    }
-}
 
 /// "€ x left" style status for a line or a section: (amount text, label, over budget).
 /// Within 2% of the budget: close enough to call it paid / received / on budget, so
@@ -2475,22 +2300,13 @@ fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
         .collect()
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum BudgetTab {
-    Result,
-    Plan,
-}
-
+/// The budget: the grid where budgets are set up, per month for a year. How the month
+/// and the year are going is on the Overview.
 #[component]
 fn BudgetPage() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let year = RwSignal::new(ctx.month.get_untracked()[..4].parse::<i32>().unwrap_or(2026));
     let notice = RwSignal::new(None::<String>);
-    // Tabs: the year result with the result per month (the default), the year forecast
-    // as a table, and Plan (the grid where budgets are entered). Per month, the Overview
-    // shows what's left.
-    let tab = RwSignal::new(BudgetTab::Result);
-    let planning = move || tab.get() == BudgetTab::Plan;
 
     // "From average": the last full months before this one.
     let avg_open = RwSignal::new(false);
@@ -2727,7 +2543,6 @@ fn BudgetPage() -> impl IntoView {
             <h1 class="year">{t!("Budget")}" "{move || year.get()}</h1>
             <button class="round" aria-label=t!("Next year") on:click=move |_| shift_year(1)>"›"</button>
             <div class="spacer"></div>
-            <Show when=planning>
                 <button
                     title=t!("Calculate the budget from the average of recent months")
                     aria-expanded=move || avg_open.get().to_string()
@@ -2747,27 +2562,7 @@ fn BudgetPage() -> impl IntoView {
                         {format!("{} → {}", capitalize(i18n::month_short(this_idx)), i18n::month_short((this_idx + 1) % 12))}
                     </button>
                 </Show>
-            </Show>
         </header>
-        <div class="filters">
-            <div class="segmented" role="group" aria-label=t!("Budget")>
-                {[
-                    (BudgetTab::Result, t!("Year result")),
-                    (BudgetTab::Plan, t!("Plan")),
-                ]
-                .into_iter()
-                .map(|(t, label)| view! {
-                    <button class:on=move || tab.get() == t aria-pressed=move || (tab.get() == t).to_string() on:click=move |_| tab.set(t)>{label}</button>
-                })
-                .collect_view()}
-            </div>
-        </div>
-        <Show when=move || tab.get() == BudgetTab::Result>
-            <ForecastTiles year=year/>
-            <YearSummary year=year/>
-            <ResultByMonth year=year/>
-        </Show>
-        <Show when=planning>
         <Show when=move || avg_open.get()>
             <div class="panel avg-panel">
                 <label class="inline">{t!("Average over the last")}
@@ -2858,7 +2653,6 @@ fn BudgetPage() -> impl IntoView {
                 }
             />
         </section>
-        </Show>
     }
 }
 

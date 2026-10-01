@@ -30,6 +30,7 @@
     "allow-restore-backup",
     "allow-restore-backup-file",
     "allow-export-backup",
+    "allow-export-csv",
     "allow-set-budget",
     "allow-set-group-budget",
     "allow-copy-budgets-from-previous-year",

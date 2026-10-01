@@ -8,18 +8,23 @@ All notable changes to Fin are listed here. The format follows
 
 ## [2.2.0] - 2026-10-01
 
+### Added
+
+- **Budget report** on Reports: per complete month, the result against the
+  budgeted result as bars, up when better, down when worse. Fixed income only, no
+  extra income or investments.
+- **Export CSV** on Reports: the report's months as a CSV file in Downloads
+  (semicolons and decimal commas, for Dutch spreadsheets).
+
 ### Changed
 
-- The Year result tab adds up from top to bottom: the budgeted result, the months
-  so far against their budget (the same total as Result per month), what the rest
-  of the year adds without a budget, the expected result, then extra income,
-  investments and the expected net. Below it the tiles' two outcomes and the
-  result per month.
+- The Budget page is just the plan: budgets per month, set up for a year. How the
+  month goes is on the Overview, how the months compare on Reports.
 
 ### Removed
 
-- The Year forecast tab: its columns told the same year in four ways that didn't
-  visibly add up. The Budget page has two tabs, Year result and Plan.
+- The Year result and Year forecast tabs, with their tiles, the year table and
+  the result per month.
 
 ## [2.1.4] - 2026-10-01
 

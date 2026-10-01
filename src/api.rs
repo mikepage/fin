@@ -187,6 +187,16 @@ pub async fn export_backup() -> Result<String, String> {
     call("export_backup", &NoArgs {}).await
 }
 
+/// Saves `content` as `name`.csv in Downloads; returns the path.
+pub async fn export_csv(name: String, content: String) -> Result<String, String> {
+    #[derive(Serialize)]
+    struct A {
+        name: String,
+        content: String,
+    }
+    call("export_csv", &A { name, content }).await
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RuleArgs<'a> {

@@ -206,6 +206,8 @@ pub fn MonthlyBarChart(
     tone: Signal<Tone>,
     label: Signal<String>,
     #[prop(into, optional)] running: Signal<bool>,
+    /// Bars only: no line at the average.
+    #[prop(into, optional)] plain: Signal<bool>,
 ) -> impl IntoView {
     let hover = RwSignal::new(None::<usize>);
     let average = move || {
@@ -286,7 +288,7 @@ pub fn MonthlyBarChart(
                 })}
             }
         });
-        let avg_line = average().filter(|a| *a != 0).map(|a| {
+        let avg_line = average().filter(|a| *a != 0 && !plain.get()).map(|a| {
             let y = frame.y(a);
             view! {
                 <line class="avg" x1=LEFT x2=W - RIGHT y1=y y2=y></line>

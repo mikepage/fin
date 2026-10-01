@@ -27,6 +27,7 @@ const COMMANDS: &[&str] = &[
     "restore_backup",
     "restore_backup_file",
     "export_backup",
+    "export_csv",
     "set_budget",
     "set_group_budget",
     "copy_budgets_from_previous_year",

@@ -833,17 +833,6 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
 /* Budget check: rows open to the largest transactions */
 .bc-item > summary { list-style: none; cursor: default; }
 .bc-item > summary::-webkit-details-marker { display: none; }
-/* The table under a bar chart: the same figures, readable. */
-.data-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.data-table th, .data-table td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--line-soft); white-space: nowrap; }
-.data-table th:first-child, .data-table td:first-child { text-align: left; }
-.data-table th { font-weight: 500; color: var(--muted); font-size: 12px; }
-.data-table td.over { color: var(--neg); }
-.data-table tr.total td { font-weight: 600; border-top: 1px solid var(--line); }
-.chart-panel .data-table { margin-top: 14px; }
-.table-card { padding: 8px 20px 12px; }
-.table-card .data-table { margin: 0; }
-.table-card .data-table thead th { border-top: 0; }
 .bc-item[open] > summary { background: hsl(var(--hue, 215) var(--tone-sat) 50% / var(--tone-row)); }
 
 /* Keep pages readable when the window is narrow: scroll instead of squeezing */
