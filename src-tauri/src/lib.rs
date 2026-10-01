@@ -426,7 +426,7 @@ mod ipc_tests {
         let ds = call(&w, "set_budget", json!({"categoryId": cat, "month": "2025-12", "amountCents": 45000})).unwrap();
         assert_eq!(ds["budgets"][0]["amount_cents"], 45000);
         assert!(call(&w, "set_budget", json!({"categoryId": cat, "month": "2025-13", "amountCents": 1})).is_err());
-        let groceries = json!({"categoryId": fin_shared::catalog::ids::GROCERIES, "month": "2025-12", "amountCents": 1});
+        let groceries = json!({"categoryId": fin_shared::catalog::ids::GROCERIES, "month": "2025-12", "amountCents": 100});
         assert!(call(&w, "set_budget", groceries).is_err(), "variable costs are budgeted per group");
         let r = call(&w, "copy_budgets_from_previous_year", json!({"year": 2026})).unwrap();
         assert_eq!(r["copied"], 1);
@@ -438,8 +438,8 @@ mod ipc_tests {
         let g = json!({"group": "Vervoer", "kind": "Variable", "month": "2026-05", "amountCents": 11500});
         let ds = call(&w, "set_group_budget", g).unwrap();
         assert_eq!(ds["group_budgets"][0]["amount_cents"], 11500);
-        assert!(call(&w, "set_group_budget", json!({"group": "Vervoer", "kind": "Income", "month": "2026-05", "amountCents": 1})).is_err());
-        assert!(call(&w, "set_group_budget", json!({"group": "Financiën", "kind": "Fixed", "month": "2026-05", "amountCents": 1})).is_err());
+        assert!(call(&w, "set_group_budget", json!({"group": "Vervoer", "kind": "Income", "month": "2026-05", "amountCents": 100})).is_err());
+        assert!(call(&w, "set_group_budget", json!({"group": "Financiën", "kind": "Fixed", "month": "2026-05", "amountCents": 100})).is_err());
 
         // Persisted to disk: a fresh store sees all three transactions.
         let reloaded = Store::load(file).unwrap();

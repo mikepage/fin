@@ -1362,6 +1362,12 @@ impl Dataset {
 /// The name of the line for money without a category (the app translates it).
 pub const NO_CATEGORY: &str = "No category";
 
+/// Budgets are whole euros: cents rounded to the nearest euro (half up), `912,49` →
+/// `912`, `912,50` → `913`.
+pub fn whole_euros(cents: i64) -> i64 {
+    (cents + 50).div_euclid(100) * 100
+}
+
 /// Formats cents as `-1.234,56` (Dutch notation).
 pub fn format_cents(cents: i64) -> String {
     format_cents_in(cents, Lang::Nl)

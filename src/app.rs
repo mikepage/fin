@@ -2442,7 +2442,8 @@ fn BudgetPage() -> impl IntoView {
             t
         })
     });
-    // A summary row; the year budget adds the year's total at the end.
+    // A summary row in whole euros, like the budgets; the year budget adds the year's
+    // total at the end.
     let summary_row = move |label: &'static str, value: fn(&[[i64; 12]; 5], usize) -> i64, class: &'static str| {
         let year_total = move || totals.with(|t| (0..12).map(|i| value(t, i)).sum::<i64>());
         view! {
@@ -2450,11 +2451,11 @@ fn BudgetPage() -> impl IntoView {
                 <span>{label}</span>
                 {(0..12).map(|i| view! {
                     <span class="right" class:current=move || is_current(i) class:over=move || class == "result" && totals.with(|t| value(t, i)) < 0>
-                        {move || euro(totals.with(|t| value(t, i)))}
+                        {move || euro_text(totals.with(|t| value(t, i)))}
                     </span>
                 }).collect_view()}
                 <Show when=is_year>
-                    <span class="right year-total" class:over=move || class == "result" && year_total() < 0>{move || euro(year_total())}</span>
+                    <span class="right year-total" class:over=move || class == "result" && year_total() < 0>{move || euro_text(year_total())}</span>
                 </Show>
             </div>
         }
@@ -2658,6 +2659,7 @@ fn BudgetPage() -> impl IntoView {
                 t!("Amounts per month. Click a month heading to copy that month to the next; empty cells have no budget.").into()
             })}
         </p>
+        <p class="hint">{t!("The totals and the result are what is budgeted, not adjusted for what actually came in and went out.")}</p>
         <section class="panel budget" class:with-total=is_year>
             <div class="budget-row head">
                 <span>{t!("Category")}</span>
@@ -2700,9 +2702,10 @@ fn BudgetPage() -> impl IntoView {
                         let n = cats.len();
                         let names = cats.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ");
                         view! {
-                            <div class=format!("budget-row group-budget {}", cat_tone(cats.first()))>
+                            // In the group's colour and with its icon, like the category rows.
+                            <div class=format!("budget-row tinted group-budget {}", cat_tone(cats.first()))>
                                 <span class="budget-name" title=format!("{}: {names}", tn!(n, "{} category", "{} categories", n))>
-                                    {t!("Group budget")}
+                                    {cat_badge(cats.first())}<span>{t!("Group budget")}</span>
                                 </span>
                                 {(0..12).map(|i| group_cell(group.clone(), names.clone(), i)).collect_view()}
                                 {row_total(group.clone(), true)}

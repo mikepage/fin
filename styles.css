@@ -347,6 +347,7 @@ label.check input { height: auto; }
 
 .year { min-width: 150px; text-align: center; }
 .hint { margin: -6px 0 0; font-size: 13px; color: var(--muted); }
+.hint + .hint { margin-top: -12px; }
 .budget { padding: 4px 16px 12px; overflow-x: auto; }
 .budget-row {
   display: grid;

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use fin_shared::{
     format_cents, months_ending, parse_amount, Category, CategoryKind, Dataset, Lang, ReportSeries, RuleKind, Transaction,
-    TransactionInput, UNSORTED_CATEGORY_ID,
+    TransactionInput, UNSORTED_CATEGORY_ID, whole_euros,
 };
 use serde_json::{json, Value};
 
@@ -714,7 +714,8 @@ fn budget(s: &mut Store, a: &mut Args) -> R<Value> {
             let id = cat.id.clone();
             let cents = match amount.as_str() {
                 "none" | "-" | "" => None,
-                s => Some(parse_amount(s).ok_or(format!("Not an amount: {s}"))?.abs()),
+                // Budgets are whole euros (see store::set_budget).
+                s => Some(whole_euros(parse_amount(s).ok_or(format!("Not an amount: {s}"))?.abs())).filter(|c| *c != 0),
             };
             s.mutate(|ds| store::set_budget(ds, &id, &month, cents))?;
             // What was stored: an amount that doesn't fit the year's income is capped.
@@ -743,7 +744,7 @@ fn budget(s: &mut Store, a: &mut Args) -> R<Value> {
             };
             let cents = match amount.as_str() {
                 "none" | "-" | "" => None,
-                s => Some(parse_amount(s).ok_or(format!("Not an amount: {s}"))?.abs()),
+                s => Some(whole_euros(parse_amount(s).ok_or(format!("Not an amount: {s}"))?.abs())).filter(|c| *c != 0),
             };
             s.mutate(|ds| store::set_group_budget(ds, &group, kind, &month, cents))?;
             let stored = s.data.group_budget_for(&group, kind, &month);

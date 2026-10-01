@@ -308,6 +308,10 @@ pub const UI: &[(&str, &str)] = &[
         "The month budgets of January to December, with extra income and investments in the month they come. Copying a month to the next leaves those where they are.",
         "De maandbegrotingen van januari tot en met december, met extra inkomsten en investeringen in de maand dat ze komen. Een maand naar de volgende kopiëren laat die staan.",
     ),
+    (
+        "The totals and the result are what is budgeted, not adjusted for what actually came in and went out.",
+        "De totalen en het resultaat zijn wat begroot is, niet bijgesteld met wat er werkelijk binnenkwam en uitging.",
+    ),
     // Reports: budget, CSV
     ("Result against the month budget", "Resultaat t.o.v. maandbegroting"),
     ("Per complete month: up is better than budgeted, down worse", "Per hele maand: omhoog is beter dan begroot, omlaag slechter"),

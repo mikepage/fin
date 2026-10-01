@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use fin_shared::{
     format_cents_in, months_ending, normalize_iban, normalize_rule, rule_matches, Account, AccountBalance, Contract, Lang, RuleKind, UNSORTED_CATEGORY_ID, BackupInfo, Budget, Category, CategoryKind, Dataset, GroupBudget, ImportFileStat, ImportRecord,
-    Transaction, TransactionInput,
+    Transaction, TransactionInput, whole_euros,
 };
 use serde::{Deserialize, Serialize};
 
@@ -101,6 +101,7 @@ impl Store {
     pub fn restore_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
         let mut data = parse_file(bytes)?;
         ensure_system_categories(&mut data);
+        round_budgets(&mut data);
         self.backup(backup::BEFORE_RESTORE)?;
         self.write(data)
     }
@@ -119,7 +120,21 @@ fn read_data(path: &Path) -> Result<Dataset, String> {
         Err(e) => return Err(format!("Cannot read {}: {e}", path.display())),
     };
     ensure_system_categories(&mut data);
+    round_budgets(&mut data);
     Ok(data)
+}
+
+/// Budgets are whole euros: one with cents from an older file is rounded (and one that
+/// rounds to nothing dropped). Saved with the next change.
+fn round_budgets(ds: &mut Dataset) {
+    for b in ds.budgets.iter_mut() {
+        b.amount_cents = whole_euros(b.amount_cents);
+    }
+    for g in ds.group_budgets.iter_mut() {
+        g.amount_cents = whole_euros(g.amount_cents);
+    }
+    ds.budgets.retain(|b| b.amount_cents != 0);
+    ds.group_budgets.retain(|g| g.amount_cents != 0);
 }
 
 fn parse_file(bytes: &[u8]) -> Result<Dataset, String> {
@@ -620,8 +635,9 @@ fn cap_to_year(ds: &Dataset, month: &str, sign: i64, old: i64, new: i64) -> Resu
     if after >= 0 || after >= before {
         return Ok(new);
     }
-    // What still fits: the room left this year (none when the year is already short).
-    let room = before.max(0);
+    // What still fits: the room left this year (none when the year is already short),
+    // in whole euros like every budget.
+    let room = before.max(0) / 100 * 100;
     let capped = if sign < 0 { old + room } else { old - room };
     if capped == old {
         // English notation; the app shows the amount in its own (see i18n::error).
@@ -635,15 +651,15 @@ fn cap_to_year(ds: &Dataset, month: &str, sign: i64, old: i64, new: i64) -> Resu
 }
 
 /// Sets or replaces the budget of an income, extra income, fixed or investment
-/// category. `None` or 0 removes it. The year result has to fit. Variable categories
-/// are budgeted per group
+/// category, rounded to whole euros. `None` or 0 (also after rounding) removes it. The
+/// year result has to fit. Variable categories are budgeted per group
 /// (set_group_budget); removing a budget of theirs left in a file is still allowed.
 pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents: Option<i64>) -> Result<(), String> {
     if !valid_month(month) {
         return Err("Invalid month".into());
     }
     let cat = ds.categories.iter().find(|c| c.id == category_id).ok_or("Category not found")?;
-    let amount = amount_cents.filter(|&a| a != 0);
+    let amount = amount_cents.map(whole_euros).filter(|&a| a != 0);
     if amount.is_some_and(|a| a < 0) {
         return Err("A budget cannot be negative".into());
     }
@@ -675,14 +691,14 @@ pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents
 }
 
 /// Sets or replaces the budget of a group's variable categories together: variable
-/// costs are budgeted per group, fixed costs and income per category. `None` or 0
-/// removes it (also one of another kind left in a file). The year result has to fit as
-/// with a category budget.
+/// costs are budgeted per group, fixed costs and income per category. Rounded to whole
+/// euros; `None` or 0 removes it (also one of another kind left in a file). The year
+/// result has to fit as with a category budget.
 pub fn set_group_budget(ds: &mut Dataset, group: &str, kind: CategoryKind, month: &str, amount_cents: Option<i64>) -> Result<(), String> {
     if !valid_month(month) {
         return Err("Invalid month".into());
     }
-    let amount = amount_cents.filter(|&a| a != 0);
+    let amount = amount_cents.map(whole_euros).filter(|&a| a != 0);
     if amount.is_some_and(|a| a < 0) {
         return Err("A budget cannot be negative".into());
     }
@@ -1499,6 +1515,32 @@ mod tests {
         set_budget(&mut ds, ids::RENT_MORTGAGE, "2027-01", Some(100)).unwrap();
     }
 
+    /// Budgets are whole euros: what is typed is rounded, a cap leaves whole euros, and
+    /// cents from an older file are rounded on load.
+    #[test]
+    fn budgets_are_whole_euros() {
+        let mut ds = default_dataset();
+        set_budget(&mut ds, ids::SALARY, "2026-01", Some(200_049)).unwrap();
+        assert_eq!(ds.budget_for(ids::SALARY, "2026-01"), Some(200_000));
+        set_budget(&mut ds, ids::RENT_MORTGAGE, "2026-01", Some(91_250)).unwrap();
+        assert_eq!(ds.budget_for(ids::RENT_MORTGAGE, "2026-01"), Some(91_300), "half up");
+        set_budget(&mut ds, ids::INTERNET, "2026-01", Some(40)).unwrap();
+        assert_eq!(ds.budget_for(ids::INTERNET, "2026-01"), None, "rounds to nothing");
+        set_group_budget(&mut ds, "Vervoer", CategoryKind::Variable, "2026-01", Some(12_345)).unwrap();
+        assert_eq!(ds.group_budget_for("Vervoer", CategoryKind::Variable, "2026-01"), Some(12_300));
+        // A year with cents left (from an older file) caps to whole euros.
+        ds.budgets.push(Budget { category_id: ids::HOLIDAY_PAY.into(), month: "2026-05".into(), amount_cents: 1_055 });
+        assert_eq!(budget_year_result(&ds, "2026"), 200_000 - 91_300 - 12_300 + 1_055);
+        set_budget(&mut ds, ids::HOME_IMPROVEMENT, "2026-08", Some(1_000_000)).unwrap();
+        assert_eq!(ds.budget_for(ids::HOME_IMPROVEMENT, "2026-08"), Some(97_400), "€ 974,55 room, € 974 fits");
+        let mut old = default_dataset();
+        old.budgets.push(Budget { category_id: ids::SALARY.into(), month: "2026-01".into(), amount_cents: 201_847 });
+        old.budgets.push(Budget { category_id: ids::INTERNET.into(), month: "2026-01".into(), amount_cents: 30 });
+        round_budgets(&mut old);
+        assert_eq!(old.budget_for(ids::SALARY, "2026-01"), Some(201_800));
+        assert_eq!(old.budget_for(ids::INTERNET, "2026-01"), None);
+    }
+
     /// Extra income and investments are in the year budget: they count in the year
     /// result, and copying a month to the next leaves them where they are.
     #[test]
@@ -1631,13 +1673,13 @@ mod tests {
             set_budget(&mut ds, &a, &format!("2025-{m:02}"), Some(1000 * m)).unwrap();
         }
         set_budget(&mut ds, &b, "2025-07", Some(90000)).unwrap();
-        set_budget(&mut ds, &a, "2026-03", Some(1)).unwrap();
-        set_budget(&mut ds, &a, "2024-01", Some(777)).unwrap();
+        set_budget(&mut ds, &a, "2026-03", Some(100)).unwrap();
+        set_budget(&mut ds, &a, "2024-01", Some(700)).unwrap();
 
         assert_eq!(copy_budgets_from_previous_year(&mut ds, 2026).unwrap(), 12);
         assert_eq!(ds.budget_for(&a, "2026-01"), Some(1000));
         assert_eq!(ds.budget_for(&a, "2026-12"), Some(12000));
-        assert_eq!(ds.budget_for(&a, "2026-03"), Some(1), "existing budget kept");
+        assert_eq!(ds.budget_for(&a, "2026-03"), Some(100), "existing budget kept");
         assert_eq!(ds.budget_for(&b, "2026-07"), Some(90000));
         assert_eq!(ds.budget_for(&b, "2026-08"), None);
         assert_eq!(ds.budget_for(&a, "2025-01"), Some(1000), "source untouched");
@@ -1695,7 +1737,7 @@ mod tests {
             })
             .unwrap();
         }
-        set_budget(&mut ds, &rent, "2026-12", Some(1)).unwrap();
+        set_budget(&mut ds, &rent, "2026-12", Some(100)).unwrap();
         ds.group_budgets.push(GroupBudget { group: "Huishouden".into(), kind: CategoryKind::Variable, month: "2026-12".into(), amount_cents: 1 });
         let household = |ds: &Dataset, m: &str| ds.group_budget_for("Huishouden", CategoryKind::Variable, m);
 
@@ -1705,7 +1747,7 @@ mod tests {
         assert_eq!(ds.budget_for(&rent, "2026-01"), Some(30000));
         assert_eq!(household(&ds, "2026-01"), Some(35000));
         assert_eq!(ds.budget_for(&food, "2026-01"), None, "variable categories get no budget of their own");
-        assert_eq!(ds.budget_for(&rent, "2026-12"), Some(1), "existing budget kept");
+        assert_eq!(ds.budget_for(&rent, "2026-12"), Some(100), "existing budget kept");
         assert_eq!(household(&ds, "2026-12"), Some(1), "existing group budget kept");
         assert_eq!(ds.budget_for(&transfer, "2026-01"), None, "transfers get no budget");
 
