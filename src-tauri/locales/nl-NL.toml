@@ -1,0 +1,415 @@
+# Fin, nl-NL: names of the standard groups and categories, and the default rules for
+# the Dutch market. Keys are the stable ids from shared/src/catalog.rs without "sys-".
+# Every catalog entry needs a name here; a unit test (locale::tests) checks that.
+
+locale = "nl-NL"
+
+[groups]
+income = "Inkomsten"
+housing = "Wonen"
+household = "Huishouden"
+medical = "Medische kosten"
+insurance = "Verzekeringen"
+telecom = "Telecom"
+subscriptions = "Abonnementen"
+transport = "Vervoer"
+education = "Educatie"
+clothing = "Kleding"
+leisure = "Vrije tijd"
+other_expenses = "Overige uitgaven"
+uncategorised = "Niet gecategoriseerd"
+
+[categories]
+# Income
+salary = "Salaris/uitkering"
+benefits = "Uitkering"
+pension = "Pensioen"
+study_allowance = "Tegemoetkoming studiekosten"
+side_income = "Bijverdiensten"
+holiday_pay = "Vakantiegeld"
+bonuses = "Bonussen"
+tax_refund = "Belastingteruggaaf"
+child_benefit = "Kinderbijslag"
+alimony_received = "Alimentatie"
+tax_allowances = "Belastingtoeslagen"
+expense_claims = "Declaraties"
+interest_received = "Rente ontvangen"
+investment_income = "Beleggingen/effecten"
+other_income = "Overige inkomsten"
+refunds = "Teruggaven"
+# Housing
+rent_mortgage = "Huur of hypotheek"
+service_costs = "Servicekosten"
+utilities = "Gas Water Licht"
+home_improvement = "Verbouwing & verduurzaming"
+municipal_taxes = "Gemeentelijke belastingen"
+# Household
+groceries = "Boodschappen"
+cash_withdrawals = "Geldopnames"
+children = "Kinderen"
+household_other = "Overig huishouden"
+personal_care = "Persoonlijke verzorging"
+charity = "Goede doelen"
+shopping = "Winkelen"
+# Medical costs
+health_insurance = "Zorgverzekering"
+deductible = "Eigen risico"
+medical_other = "Ziektekosten"
+# Insurance
+insurance = "Verzekeringen"
+# Telecom
+internet = "Internet"
+landline = "Vaste telefoon"
+mobile = "Mobiele telefoon"
+# Subscriptions
+subscriptions = "Abonnementen"
+# Transport
+fuel = "Brandstof"
+car_insurance = "Autoverzekering"
+road_tax = "Wegenbelasting"
+vehicle_maintenance = "Onderhoud auto of fiets"
+parking_tolls = "Parkeren/tol"
+moped_bike_insurance = "Brommer/fietsverzekering"
+public_transport = "Openbaar vervoer"
+car_purchase_lease = "Aankoop/Lease"
+# Education
+school_costs = "School-/studiekosten"
+courses = "Cursussen"
+# Clothing
+clothes = "Kleding"
+# Leisure
+holidays = "Vakantie"
+outings = "Vrije tijd"
+gifts = "Cadeaus"
+sport = "Sport"
+# Other expenses
+internal_transfers = "Interne overboekingen"
+savings_investments = "Sparen/beleggen"
+debt_repayment = "Schuldaflossing"
+fines = "Bekeuringen"
+overdraft_interest = "Debetrente"
+bank_fees = "Bankkosten"
+credit_card = "Creditcard"
+taxes = "Belasting"
+alimony_paid = "Betaalde alimentatie"
+other_transfers = "Overige overboekingen"
+payment_requests = "Tikkie/betaalverzoeken"
+other_expenses = "Overige uitgaven"
+# Uncategorised
+unsorted = "Nog in te delen"
+
+# Default text rules (whole words; case and punctuation are ignored, so "kpn mobiel"
+# matches "KPN - Mobiel"). `since` is the rules version the entry arrived in: a data file
+# only gets entries newer than its version, so a default the user removed doesn't come
+# back. Files from before Fin 2.0 are at version 16, so a new default needs since = 17 or
+# higher to reach them. The longest matching text wins.
+#
+# Left out on purpose because they are ambiguous (the user makes a rule once, from the
+# "To categorise" list): payment processors (Mollie, Buckaroo,
+# Multisafepay, Adyen), counterparties that pay and receive for different reasons
+# (Belastingdienst, DUO, SVB, ANWB), insurers that also sell health insurance
+# (Centraal Beheer, Interpolis, FBTO, OHRA, Univé), brands that are also common first or
+# last names (Zara, Zeeman, Douglas, Kapper, Artis, KiKa), initials-like brands (H&M, C&A)
+# and generic words ("plus", as in NPO Start Plus).
+
+# Income
+
+[[rules]]
+since = 1
+category = "benefits"
+patterns = ["uwv"]
+
+[[rules]]
+since = 1
+category = "pension"
+patterns = ["pensioenfonds", "abp", "pfzw", "aow"]
+
+[[rules]]
+since = 1
+category = "holiday_pay"
+patterns = ["vakantiegeld"]
+
+[[rules]]
+since = 1
+category = "child_benefit"
+patterns = ["kinderbijslag"]
+
+# Every allowance payment points to www.toeslagen.nl, also the abbreviated ones like
+# "VOORSCHOT KIT/Kgb" (child budget).
+[[rules]]
+since = 1
+category = "tax_allowances"
+patterns = ["zorgtoeslag", "huurtoeslag", "kinderopvangtoeslag", "kindgebonden budget", "toeslagen"]
+
+[[rules]]
+since = 1
+category = "investment_income"
+patterns = ["dividend"]
+
+[[rules]]
+since = 1
+category = "other_income"
+patterns = ["rijksdienst voor ondernemend nederland", "rijksdienst voor ondernemend nl", "rvo"]
+
+# Housing
+
+[[rules]]
+since = 1
+category = "rent_mortgage"
+patterns = ["hypotheek", "hypotheken"]
+
+[[rules]]
+since = 1
+category = "utilities"
+patterns = [
+  "vattenfall", "eneco", "essent", "greenchoice", "budget energie", "energiedirect", "vandebron",
+  "oxxio", "engie", "pure energie", "frank energie", "tibber", "zonneplan", "delta energie",
+  "atagwarmte", "atag warmte", "evides", "vitens", "dunea", "pwn", "brabant water", "waternet",
+  "oasen", "wml", "waterbedrijf",
+]
+
+[[rules]]
+since = 1
+category = "municipal_taxes"
+patterns = [
+  "gemeentelijke belastingen", "waterschap", "waterschapsbelasting", "belastingsamenwerking",
+  "sabewa", "gblt", "bsgw", "svhw",
+]
+
+# Household
+
+[[rules]]
+since = 1
+category = "groceries"
+patterns = [
+  "albert heijn", "ah to go", "jumbo", "lidl", "aldi", "dirk", "dekamarkt", "vomar",
+  "hoogvliet", "coop", "spar", "poiesz", "boni", "jan linders", "nettorama", "picnic", "ekoplaza",
+  "deen", "crisp",
+]
+
+[[rules]]
+since = 1
+category = "cash_withdrawals"
+patterns = ["geldmaat", "geldautomaat"]
+
+[[rules]]
+since = 1
+category = "children"
+patterns = ["kinderopvang", "kinderdagverblijf", "partou"]
+
+[[rules]]
+since = 1
+category = "personal_care"
+patterns = [
+  "kruidvat", "etos", "da drogist", "da drogisterij", "trekpleister", "holland & barrett", "rituals",
+  "kapsalon",
+]
+
+[[rules]]
+since = 1
+category = "charity"
+patterns = [
+  "kwf", "nierstichting", "hartstichting", "rode kruis", "unicef", "greenpeace", "amnesty",
+  "artsen zonder grenzen", "wwf", "natuurmonumenten", "longfonds", "dierenbescherming",
+  "war child", "leger des heils", "giro555",
+]
+
+# Shops and platforms that sell anything, DIY and furniture stores (furnishing, wood,
+# garden and more) and postage (mostly sending things bought or sold online). Klarna (pay
+# later) is nearly always shopping; a more specific shop in the description still wins.
+[[rules]]
+since = 1
+category = "shopping"
+patterns = [
+  "action", "hema", "bol.com", "amazon", "marktplaats", "klarna", "praxis", "gamma", "karwei",
+  "hornbach", "hubo", "ikea", "leen bakker", "kwantum", "jysk", "hollandbikeshop", "postnl",
+]
+
+# Medical costs
+
+# Health insurers. Brands that mainly sell other insurance or goods (a.s.r., Interpolis,
+# FBTO, OHRA, Univé, HEMA) are left to the "zorgverzekering" word.
+[[rules]]
+since = 1
+category = "health_insurance"
+patterns = [
+  "vgz", "cz", "zilveren kruis", "menzis", "dsw", "onvz", "zorg en zekerheid", "de friesland",
+  "stad holland", "salland", "zekur", "anderzorg", "iza", "izz", "pro life", "eucare", "aevitae",
+  "ditzo", "zorgdirect", "bewuzt", "zorgverzekering", "zorgverzekeraar", "ziektekostenverzekering",
+  "zorgpremie",
+]
+
+[[rules]]
+since = 1
+category = "deductible"
+patterns = ["eigen risico"]
+
+[[rules]]
+since = 1
+category = "medical_other"
+patterns = [
+  "huisarts", "huisartsenpraktijk", "fysiotherapie", "ziekenhuis", "tandarts", "tandartspraktijk",
+  "mondzorg", "orthodontist", "apotheek", "apotheken", "benu",
+]
+
+# Insurance
+
+[[rules]]
+since = 1
+category = "insurance"
+patterns = [
+  "verzekeren", "verzekeringen", "nationale nederlanden", "nn", "dela", "inshared", "reaal", "aegon",
+]
+
+# Telecom
+
+[[rules]]
+since = 1
+category = "internet"
+patterns = ["kpn", "ziggo", "delta fiber", "caiway"]
+
+[[rules]]
+since = 1
+category = "mobile"
+patterns = ["kpn mobiel", "delta mobiel", "vodafone", "simyo", "lebara", "lycamobile", "hollandsnieuwe", "simpel"]
+
+# Subscriptions
+
+# "SpotifyAB" is one word, so the whole-word "spotify" misses it.
+[[rules]]
+since = 1
+category = "subscriptions"
+patterns = [
+  "spotify", "spotifyab", "netflix", "disney plus", "disney+", "videoland", "npo start", "npo plus",
+  "amazon prime", "prime video", "google play", "google one", "apple.com/bill", "apple services",
+  "icloud", "youtube premium", "hbo max", "viaplay", "storytel", "audible", "dropbox", "transip",
+  "mijn.host", "strato", "hostnet", "grassfeld", "wl*google", "contributie",
+]
+
+# Transport
+
+[[rules]]
+since = 1
+category = "fuel"
+patterns = [
+  "shell", "esso", "bp", "tango", "tinq", "totalenergies", "texaco", "gulf", "argos", "avia",
+  "tamoil", "firezone",
+]
+
+[[rules]]
+since = 1
+category = "road_tax"
+patterns = ["motorrijtuigenbelasting"]
+
+[[rules]]
+since = 1
+category = "vehicle_maintenance"
+patterns = ["apk", "kwik-fit", "euromaster"]
+
+[[rules]]
+since = 1
+category = "parking_tolls"
+patterns = [
+  "parkeren", "parkeergelden", "stparkeergelden", "q-park", "easypark", "parkmobile",
+  "yellowbrick", "interparking",
+]
+
+[[rules]]
+since = 1
+category = "public_transport"
+patterns = ["ns", "ov-chipkaart", "translink", "arriva", "connexxion", "qbuzz", "keolis", "gvb", "htm", "ov-pay"]
+
+# Clothing
+
+[[rules]]
+since = 1
+category = "clothes"
+patterns = [
+  "primark", "zalando", "we fashion", "america today", "uniqlo", "hunkemöller", "hunkemoller",
+  "the sting", "costes", "vinted", "scapino", "van haren", "nelson schoenen", "omoda", "ziengs",
+  "schoenen", "jd sports", "intersport", "perry sport", "aktiesport",
+]
+
+# Leisure
+
+[[rules]]
+since = 1
+category = "holidays"
+patterns = [
+  "booking.com", "airbnb", "transavia", "klm", "tui", "corendon", "sunweb", "center parcs", "landal",
+  "roompot", "ryanair", "easyjet", "expedia", "hotels.com",
+]
+
+[[rules]]
+since = 1
+category = "outings"
+patterns = [
+  "efteling", "blijdorp", "pathe", "pathé", "kinepolis", "museumkaart", "ticketmaster",
+  "thuisbezorgd", "uber eats", "deliveroo", "mcdonalds", "mcdonald's", "burger king", "kfc",
+  "new york pizza", "starbucks", "restaurant", "brasserie", "eetcafe", "eetcafé", "lunchroom",
+  "pizzeria", "snackbar", "cafetaria", "ijssalon", "theeschenkerij", "theehuis", "koffiebar",
+  "dpg media", "mediahuis", "nrc", "de volkskrant", "de telegraaf", "blendle", "bruna", "boekhandel",
+  "pipoos", "staatsloterij", "nederlandse loterij", "postcode loterij", "vriendenloterij",
+  "bankgiro loterij", "lotto",
+]
+
+[[rules]]
+since = 1
+category = "sport"
+patterns = ["basic-fit", "sportcity", "fit for free", "anytime fitness", "trainmore", "sportschool"]
+
+# Other expenses
+
+[[rules]]
+since = 1
+category = "fines"
+patterns = ["cjib", "centraal justitieel incassobureau"]
+
+[[rules]]
+since = 1
+category = "overdraft_interest"
+patterns = ["negatief saldo", "debetrente"]
+
+[[rules]]
+since = 1
+category = "bank_fees"
+patterns = ["kosten gebruik betaalrekening", "kosten extra betaalpas", "kosten betaalrekening", "bankkosten"]
+
+[[rules]]
+since = 1
+category = "credit_card"
+patterns = ["international card services", "american express"]
+
+# Tikkie and payment requests get their own category, so paying for a dinner and friends
+# paying back net out. A more specific rule ("ijssalon") still wins.
+[[rules]]
+since = 1
+category = "payment_requests"
+patterns = ["tikkie", "betaalverzoek"]
+
+# Direction-aware rules (`direction = "in"` or `"out"`): for counterparties that both pay
+# and charge. They only apply when no plain rule matches, so "zorgtoeslag" still goes to
+# Tax allowances and "motorrijtuigenbelasting" to Road tax.
+[[rules]]
+since = 1
+category = "tax_refund"
+direction = "in"
+patterns = ["belastingdienst"]
+
+[[rules]]
+since = 1
+category = "taxes"
+direction = "out"
+patterns = ["belastingdienst"]
+
+[[rules]]
+since = 1
+category = "study_allowance"
+direction = "in"
+patterns = ["duo"]
+
+[[rules]]
+since = 1
+category = "debt_repayment"
+direction = "out"
+patterns = ["duo"]

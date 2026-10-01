@@ -1,0 +1,100 @@
+# Fin, en: English names of the standard groups and categories. Same keys as
+# nl-NL.toml (the stable ids from shared/src/catalog.rs without "sys-"). Only names:
+# the default rules match Dutch bank descriptions and stay in nl-NL.toml.
+# Every catalog entry needs a name here; a unit test (locale::tests) checks that.
+
+locale = "en"
+
+[groups]
+income = "Income"
+housing = "Housing"
+household = "Household"
+medical = "Medical costs"
+insurance = "Insurance"
+telecom = "Telecom"
+subscriptions = "Subscriptions"
+transport = "Transport"
+education = "Education"
+clothing = "Clothing"
+leisure = "Leisure"
+other_expenses = "Other expenses"
+uncategorised = "Uncategorised"
+
+[categories]
+# Income
+salary = "Salary/benefits"
+benefits = "Benefits"
+pension = "Pension"
+study_allowance = "Study allowance"
+side_income = "Side income"
+holiday_pay = "Holiday pay"
+bonuses = "Bonuses"
+tax_refund = "Tax refund"
+child_benefit = "Child benefit"
+alimony_received = "Alimony"
+tax_allowances = "Tax allowances"
+expense_claims = "Expense claims"
+interest_received = "Interest received"
+investment_income = "Investment income"
+other_income = "Other income"
+refunds = "Refunds"
+# Housing
+rent_mortgage = "Rent or mortgage"
+service_costs = "Service charges"
+utilities = "Gas, water, electricity"
+home_improvement = "Renovation & sustainability"
+municipal_taxes = "Municipal taxes"
+# Household
+groceries = "Groceries"
+cash_withdrawals = "Cash withdrawals"
+children = "Children"
+household_other = "Other household"
+personal_care = "Personal care"
+charity = "Charity"
+shopping = "Shopping"
+# Medical costs
+health_insurance = "Health insurance"
+deductible = "Deductible"
+medical_other = "Medical expenses"
+# Insurance
+insurance = "Insurance"
+# Telecom
+internet = "Internet"
+landline = "Landline"
+mobile = "Mobile phone"
+# Subscriptions
+subscriptions = "Subscriptions"
+# Transport
+fuel = "Fuel"
+car_insurance = "Car insurance"
+road_tax = "Road tax"
+vehicle_maintenance = "Vehicle maintenance"
+parking_tolls = "Parking/tolls"
+moped_bike_insurance = "Moped/bike insurance"
+public_transport = "Public transport"
+car_purchase_lease = "Car purchase/lease"
+# Education
+school_costs = "School/study costs"
+courses = "Courses"
+# Clothing
+clothes = "Clothes"
+# Leisure
+holidays = "Holidays"
+outings = "Going out"
+gifts = "Gifts"
+sport = "Sport"
+# Other expenses
+internal_transfers = "Internal transfers"
+savings_investments = "Savings/investing"
+debt_repayment = "Debt repayment"
+fines = "Fines"
+overdraft_interest = "Overdraft interest"
+bank_fees = "Bank fees"
+credit_card = "Credit card"
+taxes = "Taxes"
+alimony_paid = "Alimony paid"
+other_transfers = "Other transfers"
+payment_requests = "Tikkie/payment requests"
+other_expenses = "Other expenses"
+# Uncategorised
+unsorted = "To categorise"

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-contract"
+description = "Enables the delete_contract command without any pre-configured scope."
+commands.allow = ["delete_contract"]
+
+[[permission]]
+identifier = "deny-delete-contract"
+description = "Denies the delete_contract command without any pre-configured scope."
+commands.deny = ["delete_contract"]

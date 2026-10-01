@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-import-camt053"
+description = "Enables the import_camt053 command without any pre-configured scope."
+commands.allow = ["import_camt053"]
+
+[[permission]]
+identifier = "deny-import-camt053"
+description = "Denies the import_camt053 command without any pre-configured scope."
+commands.deny = ["import_camt053"]

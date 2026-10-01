@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-import-balances"
+description = "Enables the import_balances command without any pre-configured scope."
+commands.allow = ["import_balances"]
+
+[[permission]]
+identifier = "deny-import-balances"
+description = "Denies the import_balances command without any pre-configured scope."
+commands.deny = ["import_balances"]

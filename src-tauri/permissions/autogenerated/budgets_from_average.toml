@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-budgets-from-average"
+description = "Enables the budgets_from_average command without any pre-configured scope."
+commands.allow = ["budgets_from_average"]
+
+[[permission]]
+identifier = "deny-budgets-from-average"
+description = "Denies the budgets_from_average command without any pre-configured scope."
+commands.deny = ["budgets_from_average"]

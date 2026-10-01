@@ -1,0 +1,922 @@
+/* Palette from the Fin logo (src-tauri/icons/icon.svg): navy #0C447C, wave #85B7EB. */
+:root {
+  --bg: #f5f8fc;
+  --sidebar: #e6f1fb;
+  --panel: #ffffff;
+  --line: #d6e4f3;
+  --line-soft: #edf3fa;
+  --text: #042c53;
+  --muted: #4d6682;
+  --navy: #0c447c;
+  --accent: #378add;
+  --accent-strong: #185fa5;
+  --on-navy: #ffffff;
+  --on-navy-muted: #b5d4f4;
+  --neg: #b0501a;
+  --error-bg: #fdeee6;
+  --backdrop: rgba(4, 44, 83, 0.45);
+  --faint: #9aafc6;
+  --current-line: #85b7eb;
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a1624;
+    --sidebar: #0e2034;
+    --panel: #11263d;
+    --line: #1e3a58;
+    --line-soft: #172f49;
+    --text: #e6f1fb;
+    --muted: #93adc9;
+    --navy: #185fa5;
+    --accent: #5aa2e8;
+    --accent-strong: #85b7eb;
+    --neg: #f0a070;
+    --error-bg: #3a2216;
+    --backdrop: rgba(0, 0, 0, 0.55);
+    --faint: #5a7594;
+    --current-line: #378add;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+
+.shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  padding: 24px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 26px;
+  font-weight: 600;
+  padding: 0 10px 22px;
+}
+.logo { flex-shrink: 0; }
+.nav-item {
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.nav-item:hover { color: var(--text); }
+.nav-item.active { background: var(--panel); color: var(--text); font-weight: 600; }
+
+.content {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: 30px; }
+h2 { font-size: 24px; }
+
+.page-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.page-head h1 { white-space: nowrap; }
+.spacer { flex-grow: 1; }
+.month-nav { display: flex; align-items: center; gap: 10px; }
+.month { min-width: 240px; text-align: center; }
+
+button, input { font: inherit; color: var(--text); }
+button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  /* A fixed-height button can't take a second line: keep labels on one. */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+button:disabled { opacity: 0.55; cursor: default; }
+button.primary { background: var(--navy); border-color: var(--navy); color: var(--on-navy); font-weight: 600; }
+button.dark { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 600; }
+button.round { width: 40px; padding: 0; border-radius: 20px; font-size: 18px; }
+button.round.small { width: 28px; height: 28px; border-radius: 14px; font-size: 15px; vertical-align: middle; }
+button.icon { width: 36px; padding: 0; border: 0; background: transparent; color: var(--muted); }
+button.icon:hover { color: var(--neg); }
+button.link { height: auto; padding: 0; border: 0; background: none; color: var(--accent-strong); text-decoration: underline; }
+
+input {
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  min-width: 0;
+}
+input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+label.inline { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; }
+label.stack { font-size: 13px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 20px; }
+.empty { color: var(--muted); margin: 12px 0; }
+.muted { color: var(--muted); }
+.right { text-align: right; }
+/* Amounts are neutral; the sign shows direction. Orange (--neg) only means over budget. */
+.amount { color: var(--text); }
+.over, .over .muted { color: var(--neg); }
+/* Status badges: red over budget, green done or better, grey still open. */
+.badge { display: inline-flex; align-items: baseline; gap: 2px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 18px; white-space: nowrap; background: var(--line-soft); color: var(--muted); }
+.badge strong { font-weight: 700; }
+.badge.over, .badge.over .muted { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }
+.badge.ok { background: color-mix(in srgb, var(--series-income) 16%, transparent); color: color-mix(in srgb, var(--series-income) 75%, var(--text)); }
+.bc-value .badge { font-size: 11px; padding: 0 6px; line-height: 16px; vertical-align: 1px; }
+
+.error {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--error-bg);
+  color: var(--neg);
+}
+
+/* Overview: budget / actual / open grid. Every amount has the same size and weight. */
+.totals {
+  display: grid;
+  grid-template-columns: 110px repeat(4, minmax(0, 1fr));
+  column-gap: 16px;
+  align-items: center;
+  padding: 8px 24px;
+}
+.t-head {
+  padding: 10px 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+.t-label, .t-cell { align-self: stretch; display: flex; align-items: center; border-top: 1px solid var(--line-soft); min-height: 52px; }
+.t-label { font-size: 14px; font-weight: 500; color: var(--muted); }
+.t-cell { justify-content: flex-end; font-size: 18px; font-weight: 500; }
+.pill { padding: 6px 12px; border-radius: 8px; background: var(--line-soft); }
+.pill.strong { background: var(--sidebar); }
+
+.budget-section { padding: 6px 24px 10px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 0 6px; font-size: 14px; }
+.section-head h2 { font-size: 20px; }
+.bline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px 320px;
+  gap: 24px;
+  align-items: center;
+  min-height: 76px;
+  border-top: 1px solid var(--line-soft);
+}
+.b-name { display: flex; flex-direction: column; min-width: 0; }
+.b-name span { font-size: 16px; font-weight: 500; }
+.b-name small { font-size: 12px; color: var(--muted); }
+.status { text-align: right; font-size: 17px; }
+.status strong, .b-amount strong { font-weight: 600; }
+.b-progress { display: flex; flex-direction: column; gap: 8px; }
+.b-amount { text-align: right; font-size: 18px; }
+.bbar { position: relative; height: 12px; border-radius: 6px; background: var(--line-soft); overflow: hidden; }
+.bbar-fill, .bbar-over { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 6px; }
+.bbar-fill { background: var(--accent); }
+.bbar-over { background: var(--neg); }
+
+.tx-form {
+  display: grid;
+  grid-template-columns: 140px minmax(160px, 2fr) repeat(2, minmax(120px, 1fr)) 110px auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+}
+.inline-form { display: flex; gap: 10px; align-items: end; padding: 14px; }
+.inline-form label { flex: 1; }
+
+.list { padding: 4px 20px; }
+.tx-row {
+  display: grid;
+  grid-template-columns: 95px 30px minmax(160px, 2fr) minmax(90px, 1fr) minmax(170px, 1fr) 100px 36px;
+  gap: 12px;
+  align-items: center;
+  min-height: 50px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tx-row:last-child { border-bottom: 0; }
+.tx-row .desc { display: flex; flex-direction: column; min-width: 0; }
+.tx-row .desc > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.tx-row .desc small { display: flex; gap: 10px; align-items: baseline; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tx-row .right { font-weight: 600; }
+.acc-row, .cat-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 140px 36px;
+  gap: 12px;
+  align-items: center;
+  min-height: 54px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.cat-edit-row { grid-template-columns: minmax(0, 1fr) 150px 140px 130px 36px; }
+/* Accounts: name, IBAN, starting balance (date + amount), balance with its check */
+.acc-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 190px 36px; }
+/* Year-end balances: a row per year, a column per account */
+.ye-grid { display: grid; gap: 6px 12px; align-items: start; padding: 4px 0 10px; }
+.ye-head { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ye-year { font-weight: 600; padding-top: 9px; }
+.ye-cell { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.ye-cell small { font-size: 11px; color: var(--muted); text-align: right; }
+.ye-cell small.over { color: var(--neg); }
+.ye-cell small.ok { color: var(--series-income); }
+.acc-balance { display: flex; flex-direction: column; align-items: flex-end; }
+/* Contracts: fields in a grid, energy tariffs per group, usage per period */
+.contract { margin-bottom: 16px; padding-bottom: 16px; }
+.contract > label { margin-bottom: 4px; }
+.ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 14px; align-items: end; padding: 4px 0 12px; }
+.ct-head { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 10px 0 2px; }
+.ct-energy-toggle { padding-bottom: 9px; }
+.ct-sum { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); padding-bottom: 9px; }
+.ct-sum strong { font-size: 14px; color: var(--text); font-variant-numeric: tabular-nums; }
+.ct-usage table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ct-usage th { text-align: right; font-weight: 500; font-size: 12px; color: var(--muted); padding: 4px 6px; }
+.ct-usage th:nth-child(-n+2) { text-align: left; }
+.ct-usage td { padding: 3px 6px; border-top: 1px solid var(--line-soft); text-align: right; }
+.ct-usage td input { width: 100%; min-width: 0; }
+.ct-usage td input[type="date"] { min-width: 130px; }
+.ct-usage .link { margin-top: 8px; font-size: 13px; }
+.empty-note { padding: 16px 20px; }
+.ct-note { font-size: 12px; margin: 8px 0 0; }
+p.over { color: var(--neg); }
+.ct-year { margin-bottom: 16px; padding: 12px 20px; }
+.ct-year table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ct-year th { text-align: right; font-weight: 500; font-size: 12px; color: var(--muted); padding: 4px 8px; }
+.ct-year th:first-child, .ct-year td:first-child { text-align: left; }
+.ct-year td { padding: 5px 8px; border-top: 1px solid var(--line-soft); text-align: right; }
+.ct-year tfoot td { font-weight: 600; border-top: 1px solid var(--line); }
+.ct-year td.estimated { font-style: italic; color: var(--muted); }
+.ct-year td.over { color: var(--neg); }
+.ct-year td.ok { color: var(--series-income); }
+.acc-balance small { font-size: 11px; font-weight: 400; color: var(--muted); }
+.acc-balance small.over { color: var(--neg); }
+.fixed-kind { padding: 0 10px; font-size: 14px; color: var(--muted); }
+label.check:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
+.cat-edit-row.disabled .cat-name, .cat-edit-row.disabled input:not([type]) { color: var(--muted); }
+.cat-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--line-soft); color: var(--muted); }
+button.small { height: 32px; padding: 0 10px; font-size: 13px; }
+.iban-rules { padding: 10px 14px 14px; margin: 0 0 10px; border-radius: 10px; background: var(--bg); font-size: 14px; }
+.iban-rules p { margin: 0 0 8px; }
+.iban-rules ul { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.iban-rules li { display: flex; align-items: center; gap: 8px; }
+.iban-rules .rule-value { font-weight: 500; }
+.iban-add { display: flex; gap: 8px; }
+.iban-add input { width: 260px; }
+.group-title { font-size: 18px; padding: 12px 0 4px; }
+label.check { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; }
+label.check input { height: auto; }
+.cat-row .name { display: flex; flex-direction: column; }
+.cat-row .name small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.acc-row:last-child, .cat-edit-row:last-child { border-bottom: 0; }
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.dialog {
+  width: 540px;
+  max-width: 100%;
+  padding: 28px;
+  background: var(--panel);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 20px 60px rgba(4, 44, 83, 0.25);
+}
+.dropzone {
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 22px;
+  border: 1.5px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--sidebar);
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.dropzone strong { color: var(--accent-strong); }
+.dropzone.disabled { opacity: 0.55; cursor: default; }
+.dropzone input { display: none; }
+.files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.files li { display: flex; justify-content: space-between; gap: 12px; }
+.files li.current { font-weight: 600; }
+.progress-wrap { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.progress { height: 10px; background: var(--line-soft); border-radius: 5px; overflow: hidden; }
+.progress-fill { height: 10px; background: var(--accent); border-radius: 5px; transition: width 0.15s linear; }
+.result { margin: 0; font-weight: 500; }
+.actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+.year { min-width: 150px; text-align: center; }
+.hint { margin: -6px 0 0; font-size: 13px; color: var(--muted); }
+.budget { padding: 4px 16px 12px; overflow-x: auto; }
+.budget-row {
+  display: grid;
+  grid-template-columns: 170px repeat(12, minmax(54px, 1fr));
+  gap: 5px;
+  align-items: center;
+  padding: 3px 0;
+  min-width: 880px;
+}
+.budget-row.head { padding: 10px 0; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
+.budget-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.month-head {
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+.month-head:hover { background: var(--sidebar); color: var(--accent-strong); }
+.month-head.current { color: var(--accent-strong); font-weight: 700; }
+.budget-group { padding: 12px 0 4px; font-size: 13px; font-weight: 600; }
+.budget-group .muted { font-weight: 400; }
+.budget-cell { width: 100%; height: 32px; border-radius: 6px; padding: 0 6px; text-align: right; font-size: 13px; }
+.budget-cell::placeholder { color: var(--faint); }
+.budget-cell.current { border-color: var(--current-line); background: var(--sidebar); }
+.budget-row.total {
+  padding: 12px 0 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+}
+.budget-row.total .right { padding-right: 6px; white-space: nowrap; }
+.budget-row.total .current { color: var(--accent-strong); }
+
+/* Import & backup */
+.log-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line-soft); }
+.log-row.undone .log-main { opacity: 0.6; }
+.log-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; }
+.log-files { list-style: none; margin: 4px 0 0; padding: 0; font-size: 13px; }
+.log-files code { font-size: 12px; }
+.log-action { display: flex; align-items: center; }
+.backup-row { display: grid; grid-template-columns: 160px 140px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 48px; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.backup-row .tag { justify-self: start; }
+.section-head .actions { display: flex; gap: 8px; }
+.file-button { flex-direction: row; align-items: center; height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 15px; cursor: pointer; }
+.file-button input { display: none; }
+.confirm { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.confirm-box { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 8px; border-radius: 10px; background: var(--error-bg); font-size: 14px; }
+button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff; }
+
+/* Transaction filters */
+.filters { display: flex; align-items: center; gap: 10px; }
+.filters .search { width: 340px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; height: 38px; border-radius: 19px; }
+.chip.on { background: var(--sidebar); border-color: var(--accent); color: var(--accent-strong); font-weight: 600; }
+.count { display: inline-block; min-width: 20px; padding: 1px 7px; border-radius: 10px; background: var(--line-soft); color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; }
+.nav-item { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.nav-item .label { flex: 1; }
+.nav-icon { flex-shrink: 0; }
+.nav-item.collapse { margin-top: auto; }
+.sidebar { transition: width 0.15s; }
+/* Collapsed menu: icons only; names show as tooltips, the count as a small badge. */
+.shell.collapsed .sidebar { width: 64px; padding-left: 10px; padding-right: 10px; }
+.shell.collapsed .label { display: none; }
+.shell.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+.shell.collapsed .nav-item { justify-content: center; position: relative; padding: 10px 0; }
+.shell.collapsed .nav-item .count { position: absolute; top: 2px; right: 0; min-width: 0; padding: 0 5px; font-size: 10px; }
+.shell.collapsed .nav-item.collapse svg { transform: scaleX(-1); }
+
+/* Overview without data */
+.getting-started { padding: 16px 24px 20px; }
+.getting-started h2 { font-size: 20px; margin-bottom: 10px; }
+.getting-started ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.getting-started li span { margin-right: 12px; }
+.getting-started li.done span { color: var(--muted); text-decoration: line-through; }
+
+/* Offer after adding a rule */
+.offer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border-radius: 10px; background: var(--sidebar); border: 1px solid var(--line); font-size: 14px; }
+.offer span { flex: 1; min-width: 280px; }
+
+/* Charts. Series colors validated with the dataviz palette checks (light and dark). */
+:root {
+  --series-income: #1baf7a;
+  --series-expense: #2a78d6;
+  --series-pos: #2a78d6;
+  --series-neg: #b0501a;
+  --grid: #e6edf5;
+  --axis: #b9c9da;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-income: #199e70;
+    --series-expense: #3987e5;
+    --series-pos: #3987e5;
+    --series-neg: #d95926;
+    --grid: #1b334d;
+    --axis: #34506e;
+  }
+}
+.chart-panel { padding: 6px 20px 14px; }
+.chart-wrap { position: relative; }
+.chart { display: block; width: 100%; height: auto; font-variant-numeric: tabular-nums; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .axis-zero { stroke: var(--axis); stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 12px; }
+.chart .value { fill: var(--text); font-size: 13px; font-weight: 600; }
+.chart .bar.income { fill: var(--series-income); }
+.chart .bar.expense { fill: var(--series-expense); }
+.chart .bar.pos { fill: var(--series-pos); }
+.chart .bar.neg { fill: var(--series-neg); }
+.chart .month .bar { transition: opacity 0.1s; }
+.chart:has(.month.active) .month:not(.active) .bar { opacity: 0.45; }
+.chart .hit { fill: transparent; cursor: default; outline: none; }
+.chart-tip {
+  position: absolute;
+  top: 8px;
+  transform: translateX(12px);
+  min-width: 190px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(4, 44, 83, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  pointer-events: none;
+}
+.chart-tip.flip { transform: translateX(calc(-100% - 12px)); }
+.chart-tip .row { display: flex; align-items: center; gap: 6px; }
+.chart-tip .row b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.table-view { padding: 10px 20px; font-size: 14px; }
+.table-view summary { cursor: pointer; color: var(--muted); }
+.table-view table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.table-view th, .table-view td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--line-soft); }
+.table-view th:first-child, .table-view td:first-child { text-align: left; }
+.table-view th { font-weight: 500; color: var(--muted); font-size: 12px; }
+
+/* Budget from average */
+.avg-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 20px; }
+.avg-preview { flex-basis: 100%; margin: 0; font-size: 14px; }
+.avg-panel .actions { flex-basis: 100%; }
+
+/* Categorise form (To categorise) */
+.tx-row.unsorted .desc > span { font-weight: 600; }
+.rule-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 2px 0 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  font-size: 14px;
+}
+.rule-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; flex-basis: 100%; }
+.rule-choices .pattern { width: 220px; height: 34px; }
+.rule-choices .rule-value { font-weight: 500; }
+.rule-preview { flex-basis: 100%; margin: 0; font-size: 13px; }
+.rule-form .actions { flex-basis: 100%; }
+.iban-rules li .muted { font-size: 12px; min-width: 120px; }
+
+/* Reports */
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.segmented button { border: 0; border-radius: 0; height: 38px; }
+.segmented button + button { border-left: 1px solid var(--line); }
+.segmented button.on { background: var(--sidebar); color: var(--accent-strong); font-weight: 600; }
+.report-totals { grid-template-columns: 180px repeat(4, minmax(0, 1fr)); }
+.report-totals .t-label { text-transform: none; }
+.chart .avg { stroke: var(--muted); stroke-width: 1; opacity: 0.7; }
+.chart .avg-label { fill: var(--muted); font-size: 12px; }
+
+/* Transaction filters (no manual entry: transactions come from imports) */
+.tx-filters {
+  display: grid;
+  grid-template-columns: minmax(160px, 2fr) repeat(2, minmax(130px, 1fr)) 110px minmax(130px, 1fr);
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+}
+.tx-filters .combo, .tx-filters input { width: 100%; }
+
+/* "Without …" dropdown on Reports: looks like a select, opens a checkbox list */
+.dropdown { position: relative; }
+.dropdown > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: default;
+  white-space: nowrap;
+}
+.dropdown > summary::-webkit-details-marker { display: none; }
+.dropdown > summary::after { content: "▾"; color: var(--muted); font-size: 12px; }
+.dropdown.on > summary { border-color: var(--accent); color: var(--accent-strong); }
+.dropdown > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dropdown-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--popover-shadow);
+}
+.dropdown-menu fieldset { border: 0; margin: 0 0 8px; padding: 0; }
+.dropdown-menu legend { padding: 0; margin-bottom: 2px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.dropdown-menu label.check { flex-direction: row; align-items: center; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--text); }
+.dropdown-menu label.check input { height: auto; }
+.dropdown-menu .quick { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+
+/* Combo box (src/combo.rs), in place of every <select>: a button like the dropdown
+   above, and a list with the same panel. The list is fixed, placed from script. */
+:root { --popover-shadow: 0 6px 20px rgba(4, 44, 83, 0.15); --option-active: #e6f1fb; }
+@media (prefers-color-scheme: dark) {
+  :root { --popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); --option-active: #1c3a5a; }
+}
+.combo { display: inline-flex; min-width: 0; }
+.combo-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: default;
+  flex-shrink: 1;
+}
+.combo.open .combo-button { border-color: var(--accent); }
+/* Free text: a text field with the arrow inside it */
+.combo.free { position: relative; }
+.combo-input { flex: 1; min-width: 0; padding-right: 28px; }
+.combo.free .combo-arrow { position: absolute; right: 10px; top: 0; bottom: 0; display: flex; align-items: center; cursor: default; }
+.combo-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.combo-value.placeholder { color: var(--muted); }
+.combo-arrow { color: var(--muted); font-size: 12px; }
+.combo .type-badge { width: 22px; height: 22px; border-radius: 6px; }
+.combo .type-badge svg { width: 13px; height: 13px; }
+.combo-pop {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--popover-shadow);
+  font-size: 14px;
+  color: var(--text);
+}
+.combo-search { flex-shrink: 0; height: 32px; margin: 0 0 6px; font-size: 14px; }
+.combo-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.combo-group { padding: 8px 8px 2px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.combo-list > [role="group"]:first-child .combo-group { padding-top: 4px; }
+.combo-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: default;
+  white-space: nowrap;
+}
+.combo-option.active { background: var(--option-active); }
+.combo-option.selected { font-weight: 600; }
+.combo-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.combo-check { flex-shrink: 0; color: var(--accent-strong); visibility: hidden; }
+.combo-option.selected .combo-check { visibility: visible; }
+.combo-empty { padding: 8px; color: var(--muted); }
+
+
+/* Transaction colors: one hue per category group (own categories: eight more), the
+   icon in that hue and the whole row lightly tinted. Transfers are grey, still to
+   sort is orange. Lightness per theme, so both stay readable. */
+:root { --tone-fg: 36%; --tone-sat: 68%; --tone-badge: 0.24; --tone-row: 0.12; }
+@media (prefers-color-scheme: dark) {
+  :root { --tone-fg: 72%; --tone-sat: 66%; --tone-badge: 0.3; --tone-row: 0.14; }
+}
+.t-income { --hue: 150; }
+.t-housing { --hue: 212; }
+.t-household { --hue: 42; }
+.t-medical { --hue: 355; }
+.t-insurance { --hue: 182; }
+.t-telecom { --hue: 262; }
+.t-subscriptions { --hue: 292; }
+.t-transport { --hue: 95; }
+.t-education { --hue: 24; }
+.t-clothing { --hue: 322; }
+.t-leisure { --hue: 64; }
+.t-other_expenses { --hue: 232; --tone-sat: 30%; }
+.t-requests { --hue: 196; }
+.t-transfer { --hue: 215; --tone-sat: 8%; }
+.t-unsorted { --hue: 22; --tone-sat: 80%; }
+.t-own0 { --hue: 10; } .t-own1 { --hue: 55; } .t-own2 { --hue: 120; } .t-own3 { --hue: 165; }
+.t-own4 { --hue: 198; } .t-own5 { --hue: 245; } .t-own6 { --hue: 278; } .t-own7 { --hue: 340; }
+.tx-row[class*=" t-"] {
+  background: hsl(var(--hue) var(--tone-sat) 50% / var(--tone-row));
+  margin: 5px 0;
+  padding: 6px 16px;
+  border-radius: 10px;
+  border-bottom: 0;
+}
+/* The same tint on category rows elsewhere: Overview, Budget, Categories, Settings */
+.tinted[class*=" t-"] {
+  background: hsl(var(--hue) var(--tone-sat) 50% / var(--tone-row));
+  border-radius: 10px;
+  border-bottom-color: transparent;
+  border-top-color: transparent;
+}
+.bline.tinted, .cat-edit-row.tinted, .rule-row.tinted { margin: 6px 0; padding-left: 18px; padding-right: 20px; }
+.bline.tinted { padding-top: 6px; padding-bottom: 6px; }
+/* Padding on the name cell, not the row, so the month columns stay under their heads. */
+.budget-row.tinted { margin: 2px 0; }
+.budget-row.tinted .budget-name { padding-left: 6px; }
+.b-name { flex-direction: row; align-items: center; gap: 10px; }
+.b-label { display: flex; flex-direction: column; min-width: 0; }
+.budget-name, .rule-cat { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.budget-name > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.budget-name .type-badge, .rule-cat .type-badge { width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
+.budget-name .type-badge svg, .rule-cat .type-badge svg { width: 14px; height: 14px; }
+.cat-name input { flex: 1; min-width: 0; }
+.type-badge { flex-shrink: 0; }
+/* Budget bars and a single category's report bars in the category's color; over budget stays orange */
+.bline[class*=" t-"] .bbar-fill { background: hsl(var(--hue) var(--tone-sat) var(--tone-bar)); }
+.chart-panel[class*=" t-"] .chart .bar.expense,
+.chart-panel[class*=" t-"] .chart .bar.income { fill: hsl(var(--hue) var(--tone-sat) var(--tone-bar)); }
+:root { --tone-bar: 48%; }
+@media (prefers-color-scheme: dark) { :root { --tone-bar: 60%; } }
+.type-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  color: hsl(var(--hue, 215) var(--tone-sat) var(--tone-fg));
+  background: hsl(var(--hue, 215) var(--tone-sat) 50% / var(--tone-badge));
+}
+
+/* Category as text; the pencil appears on hover or focus, the picker needs a save */
+.cat-cell { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.cat-cell .cat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-cell .edit { width: 28px; opacity: 0; }
+.tx-row:hover .cat-cell .edit, .cat-cell .edit:focus-visible { opacity: 1; }
+.cat-cell .edit:hover { color: var(--accent-strong); }
+.cat-cell.editing .combo { flex: 1; }
+/* The row shows the icon already; the narrow cell needs the room for the name. */
+.cat-cell .combo-button .type-badge { display: none; }
+.cat-cell.editing .icon { width: 30px; }
+.cat-cell .save { color: var(--accent-strong); }
+.cat-cell .save:hover { color: var(--accent); }
+
+/* Rules on a transaction: filled bolt + the rule that sorted it, or an outline bolt to make one */
+.rule-hit, .rule-make {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: auto; padding: 0 5px; border: 0; border-radius: 6px;
+  background: transparent; font-size: 11px; line-height: 18px;
+}
+.rule-hit { color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 12%, transparent); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-make { color: var(--faint); }
+.rule-make:hover, .rule-hit:hover { color: var(--accent); }
+
+/* Settings: rules */
+.settings { padding: 8px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.settings h2 { display: flex; align-items: center; gap: 6px; }
+.settings h3 { margin: 6px 0 0; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; }
+.settings .search { max-width: 360px; }
+.rule-add { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(200px, 1fr) minmax(200px, 2fr) auto; gap: 10px; align-items: end; }
+.rule-list { display: flex; flex-direction: column; }
+.rule-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(0, 2fr) 36px; gap: 12px; align-items: center; min-height: 40px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.rule-row:last-child { border-bottom: 0; }
+.rule-row .rule-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.rule-row .icon { display: inline-flex; align-items: center; justify-content: center; height: 32px; }
+.defaults > summary { list-style: none; cursor: default; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.defaults > summary::-webkit-details-marker { display: none; }
+.defaults > summary h3::before { content: "▸"; color: var(--muted); font-size: 12px; }
+.defaults[open] > summary h3::before { content: "▾"; }
+
+/* Overview: four summary cards */
+.sum-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.sum-card.investment .sum-bar > div { background: hsl(262 55% 55%); }
+.sum-card {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 16px 18px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--line);
+  font-size: 13px;
+}
+.sum-title { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.sum-value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sum-bar { height: 6px; margin: 6px 0 2px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.sum-bar > div { height: 100%; border-radius: 3px; background: var(--accent); }
+.sum-card.income .sum-bar > div { background: var(--series-income); }
+.sum-card.fixed .sum-bar > div { background: var(--accent-strong); }
+.sum-card.saldo .sum-bar { visibility: hidden; }
+.sum-card.saldo.neg .sum-value { color: var(--neg); }
+.sum-status { color: var(--muted); }
+.sum-status.over { color: var(--neg); }
+.sum-status strong { font-weight: 600; }
+
+/* Legend (budget chart) */
+.legend { display: flex; gap: 16px; margin-left: auto; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-block; width: 12px; height: 10px; border-radius: 3px; }
+.key.actual { background: linear-gradient(90deg, hsl(212 68% 50%), hsl(42 68% 50%), hsl(322 68% 50%)); }
+.key.budget { width: 2px; height: 14px; border-radius: 1px; background: var(--text); }
+.key.before { height: 4px; background: var(--faint); }
+
+/* Budget chart: one horizontal bar per category on a shared scale */
+.bc { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 8px; }
+.bc-row {
+  display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 150px;
+  gap: 14px; align-items: center; min-height: 34px; border-radius: 8px; padding: 0 8px;
+}
+.bc-row:hover { background: hsl(var(--hue, 215) var(--tone-sat) 50% / var(--tone-row)); }
+.bc-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.bc-label span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-label .type-badge { width: 24px; height: 24px; border-radius: 6px; }
+.bc-label .type-badge svg { width: 14px; height: 14px; }
+.bc-track { position: relative; height: 22px; }
+.bc-bar {
+  position: absolute; top: 3px; left: 0; height: 12px; border-radius: 0 4px 4px 0; min-width: 2px;
+  background: hsl(var(--hue, 215) var(--tone-sat) var(--tone-bar));
+}
+.bc-before { position: absolute; bottom: 1px; left: 0; height: 3px; border-radius: 2px; background: var(--faint); }
+.bc-budget { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); }
+.bc-value { text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bc-value strong { font-weight: 600; }
+.bc-value.over strong { color: var(--neg); }
+.section-status { font-size: 14px; }
+@media (max-width: 900px) { .sum-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.section-status .status { font-size: 14px; }
+
+/* Transaction date: the day it counts on; click to change. Moved ones show the bank date. */
+.date-cell {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  height: auto; padding: 2px 4px; margin-left: -4px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--muted); font-variant-numeric: tabular-nums; text-align: left;
+}
+.date-cell:hover { color: var(--accent-strong); background: hsl(var(--hue, 215) var(--tone-sat) 50% / 0.12); }
+.date-cell.moved span { color: var(--accent-strong); font-weight: 600; }
+.date-cell small { font-size: 10px; color: var(--muted); }
+.tx-row { position: relative; }
+.date-edit {
+  position: absolute; z-index: 15; left: 8px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(4, 44, 83, 0.15);
+}
+.date-edit input { height: 34px; }
+.date-actions { display: flex; align-items: center; gap: 2px; }
+.date-actions .icon { width: 30px; }
+.date-actions .save { color: var(--accent-strong); }
+.date-actions .link { font-size: 12px; padding: 0 6px; }
+
+/* Budget: summary per kind and the result, above the categories */
+.budget-summary { padding: 4px 0 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.budget-summary .budget-row.total { margin-top: 0; padding: 7px 0; border-top: 0; font-weight: 500; }
+.budget-summary .budget-row.total > span:first-child { color: var(--muted); }
+.budget-summary .budget-row.result { margin-top: 4px; border-top: 1px solid var(--line-soft); font-weight: 600; }
+.budget-summary .budget-row.result > span:first-child { color: var(--text); }
+
+/* Budget check: rows open to the largest transactions */
+.bc-item > summary { list-style: none; cursor: default; }
+.bc-item > summary::-webkit-details-marker { display: none; }
+.bc-row.check { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 140px 100px; }
+/* Where spending should be by now: a dashed line on the track. */
+.bc-now { position: absolute; top: 2px; bottom: 2px; width: 0; margin-left: -1px; border-left: 2px dashed var(--muted); opacity: .7; }
+/* The table under a bar chart: the same figures, readable. */
+.data-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.data-table th, .data-table td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--line-soft); white-space: nowrap; }
+.data-table th:first-child, .data-table td:first-child { text-align: left; }
+.data-table th { font-weight: 500; color: var(--muted); font-size: 12px; }
+.data-table td.over { color: var(--neg); }
+.data-table tr.total td { font-weight: 600; border-top: 1px solid var(--line); }
+.chart-panel .data-table { margin-top: 14px; }
+.table-card { padding: 8px 20px 12px; }
+.table-card .data-table { margin: 0; }
+.table-card .data-table thead th { border-top: 0; }
+.bc-item[open] > summary { background: hsl(var(--hue, 215) var(--tone-sat) 50% / var(--tone-row)); }
+.bc-status { font-size: 13px; text-align: right; white-space: nowrap; }
+.bc-status.over strong { color: var(--neg); }
+
+/* Year forecast */
+.afford { padding: 8px 20px 14px; }
+/* Three yearly columns, each wide enough for an amount with its badge */
+.af-grid { display: grid; grid-template-columns: minmax(130px, 1.2fr) repeat(4, minmax(120px, 1fr)); column-gap: 16px; }
+.af-cell.pace { font-weight: 600; }
+.af-cell.pace.result { font-size: 20px; font-weight: 700; }
+.af-room { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.af-cell.forecast { color: var(--accent-strong); }
+.af-head { padding: 6px 0; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); text-align: right; border-bottom: 1px solid var(--line-soft); }
+.af-label, .af-cell { padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.af-label { color: var(--muted); }
+.af-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.af-cell.strong { font-weight: 600; }
+/* Discretionary is a sum (income − fixed costs): a line above it, not bold */
+.af-label.sub, .af-cell.sub { color: var(--text); border-top: 1px solid var(--muted); margin-top: -1px; }
+.af-label.result, .af-cell.result { font-weight: 700; color: var(--text); border-bottom: 0; }
+.af-cell.over, .af-label.result.over { color: var(--neg); }
+.af-verdict { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.af-verdict.over { color: var(--neg); }
+.af-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+ul.af-verdict { margin: 8px 0 0; padding-left: 18px; font-size: 14px; color: var(--text); }
+ul.af-verdict li { margin: 2px 0; }
+/* The expected year and the result stand out */
+.af-cell.forecast { font-weight: 600; }
+.af-label.result, .af-cell.result { font-size: 16px; }
+.af-cell.forecast.result { font-size: 20px; font-weight: 700; }
+.af-badge { white-space: nowrap; }
+/* Keep pages readable when the window is narrow: scroll instead of squeezing */
+.content { min-width: 720px; }
+
+/* The pot: small variable spending under one budget */
+.bc-label small.count { flex-shrink: 0; padding: 1px 6px; border-radius: 6px; font-size: 11px; color: var(--muted); background: var(--line-soft); }
+/* A group budget in the overview: the group's row opens to its categories and the
+   rest they share. */
+.bc-item.group > summary { cursor: pointer; }
+.bc-item.group > summary .bc-label > span:not(.type-badge)::after { content: " ▸"; color: var(--muted); }
+.bc-item.group[open] > summary .bc-label > span:not(.type-badge)::after { content: " ▾"; }
+.bc-row.sub { min-height: 26px; }
+.bc-row.sub .bc-label { padding-left: 32px; font-size: 13px; color: var(--muted); }
+.bc-row.sub .bc-track { height: 12px; }
+.bc-row.sub .bc-value { font-size: 13px; }
+.bc-row.sub.rest .bc-label { font-style: italic; }
+/* The group budget rows on the Budget page. */
+.budget-row.group-budget .budget-name { padding-left: 6px; font-weight: 600; font-size: 13px; }
+.budget-row.group-budget .budget-cell { font-weight: 600; }
+.budget-row.group-budget .group-toggle { font-size: 13px; font-weight: 600; text-decoration: none; color: var(--text); white-space: nowrap; }
+.budget-row.group-budget .group-toggle:hover { color: var(--accent-strong); }
+/* Result: orange with a "shortfall" badge when short, a quiet "to save" badge otherwise */
+.af-cell.result.over { color: var(--neg); }
+.af-badge {
+  display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 9px;
+  font-size: 11px; font-weight: 600; vertical-align: middle;
+  color: var(--muted); background: var(--line-soft);
+}
+.af-badge.short { color: var(--neg); background: color-mix(in srgb, var(--neg) 16%, transparent); }
+
+/* Forecast: lighter bars for months to come, and the running total through the year */
+.chart .bar.forecast { opacity: 0.35; }
+.chart .running { fill: none; stroke: var(--text); stroke-width: 2; stroke-linejoin: round; }
+.chart .running.forecast { stroke-dasharray: 5 4; opacity: 0.7; }
+.chart .running-label { fill: var(--muted); font-size: 11px; font-weight: 400; }
+.chart .running.pace { stroke: var(--neg); stroke-dasharray: 2 4; stroke-linecap: round; opacity: 0.9; }
+.chart .running-label.pace { fill: var(--neg); }
+
+/* Split: parts of a transaction in other categories */
+.split-tag { padding: 0 6px; border-radius: 6px; font-size: 11px; line-height: 18px; color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.split-form { flex-direction: column; align-items: stretch; }
+.split-row { display: grid; grid-template-columns: 140px minmax(0, 1fr) 36px; gap: 8px; align-items: center; }
+.split-form > .link { align-self: flex-start; font-size: 13px; }
+.settings label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }

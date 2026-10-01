@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-budget-month-to-next"
+description = "Enables the copy_budget_month_to_next command without any pre-configured scope."
+commands.allow = ["copy_budget_month_to_next"]
+
+[[permission]]
+identifier = "deny-copy-budget-month-to-next"
+description = "Denies the copy_budget_month_to_next command without any pre-configured scope."
+commands.deny = ["copy_budget_month_to_next"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-counts-on"
+description = "Enables the set_counts_on command without any pre-configured scope."
+commands.allow = ["set_counts_on"]
+
+[[permission]]
+identifier = "deny-set-counts-on"
+description = "Denies the set_counts_on command without any pre-configured scope."
+commands.deny = ["set_counts_on"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-budgets-from-previous-year"
+description = "Enables the copy_budgets_from_previous_year command without any pre-configured scope."
+commands.allow = ["copy_budgets_from_previous_year"]
+
+[[permission]]
+identifier = "deny-copy-budgets-from-previous-year"
+description = "Denies the copy_budgets_from_previous_year command without any pre-configured scope."
+commands.deny = ["copy_budgets_from_previous_year"]
