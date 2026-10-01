@@ -777,9 +777,11 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
 /* Budget chart: one horizontal bar per category on a shared scale */
 .bc { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 8px; }
 .bc-row {
-  display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 150px;
+  display: grid; grid-template-columns: minmax(170px, 240px) minmax(0, 1fr) 190px 110px;
   gap: 14px; align-items: center; min-height: 34px; border-radius: 8px; padding: 0 8px;
 }
+/* The status of a line, in its own column so they line up like a table. */
+.bc-flag { text-align: left; white-space: nowrap; }
 .bc-row:hover { background: hsl(var(--hue, 215) var(--tone-sat) 50% / var(--tone-row)); }
 .bc-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
 .bc-label span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -875,13 +877,13 @@ ul.af-verdict li { margin: 2px 0; }
 .content { min-width: 720px; }
 
 /* The pot: small variable spending under one budget */
-.bc-label small.count { flex-shrink: 0; padding: 1px 6px; border-radius: 6px; font-size: 11px; color: var(--muted); background: var(--line-soft); }
 /* A group budget in the overview: the group's row opens to its categories and the
    rest they share. */
 .bc-item.group > summary { cursor: pointer; }
 .bc-item.group > summary .bc-label > span:not(.type-badge)::after { content: " ▸"; color: var(--muted); }
 .bc-item.group[open] > summary .bc-label > span:not(.type-badge)::after { content: " ▾"; }
-.bc-row.sub { min-height: 26px; }
+.bc-row.sub { min-height: 30px; padding-top: 3px; padding-bottom: 3px; }
+.bc-item.group[open] { padding-bottom: 6px; }
 .bc-row.sub .bc-label { padding-left: 32px; font-size: 13px; color: var(--muted); }
 .bc-row.sub .bc-track { height: 12px; }
 .bc-row.sub .bc-value { font-size: 13px; }

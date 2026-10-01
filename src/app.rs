@@ -184,6 +184,12 @@ fn budget_text(cents: i64) -> String {
     i18n::whole(cents)
 }
 
+/// A budget amount with the € sign, without the cents when they are whole: `€ 1.350`,
+/// `€ 912,09`.
+fn euro_text(cents: i64) -> String {
+    format!("€ {}", budget_text(cents))
+}
+
 /// Rounded to whole euros, without the € sign: `12.811`.
 fn whole_euros(cents: i64) -> String {
     i18n::whole((cents + 50).div_euclid(100) * 100)
@@ -427,12 +433,16 @@ fn Overview() -> impl IntoView {
     let before = Memo::new(move |_| {
         compare_month().map(|m| {
             let o = visible(ctx.data.with(|d| d.budget_overview_grouped(&m)));
+            // Lines, and a group's categories by their id, so those compare too.
             o.income
                 .into_iter()
                 .chain(o.fixed)
                 .chain(o.variable)
                 .chain(o.investment)
-                .map(|l| (line_key(&l), l.actual_cents))
+                .flat_map(|l| {
+                    let members: Vec<_> = l.members.iter().map(|m| (m.category_id.clone(), m.actual_cents)).collect();
+                    std::iter::once((line_key(&l), l.actual_cents)).chain(members)
+                })
                 .collect::<Vec<_>>()
         })
     });
@@ -1288,11 +1298,22 @@ fn BudgetSection(
             if let Some(w) = was {
                 tip.push_str(&format!(" · {}", t!("compared month € {}", budget_text(w))));
             }
+            // One status per budgeted line, in its own column: over budget (spending
+            // beyond 2%) or on budget; income only once it is in.
+            let flag = l.budget_cents.and_then(|b| {
+                let open = b - l.actual_cents;
+                if over {
+                    Some((t!("over"), true))
+                } else if kind.is_income() && open > 0 && !within_tolerance(open, b) {
+                    None
+                } else {
+                    Some((t!("on budget"), false))
+                }
+            });
             let row = view! {
                 <div class="bc-label">
                     {badge}
                     <span>{name.clone()}</span>
-                    {l.group_line.then(|| view! { <small class="count">{tn!(l.members.len(), "{} category", "{} categories", l.members.len())}</small> })}
                 </div>
                 <div class="bc-track">
                     <div class="bc-bar" style:width=pct(l.actual_cents)></div>
@@ -1300,26 +1321,33 @@ fn BudgetSection(
                     {l.budget_cents.map(|b| view! { <div class="bc-budget" style:left=pct(b)></div> })}
                 </div>
                 <div class="bc-value">
-                    // Over budget: how much, in a badge.
-                    {over.then(|| view! { <small class="badge over">"+"{amount.clone()}</small>" " })}
-                    <strong>"€ "{budget_text(l.actual_cents)}</strong>
-                    {l.budget_cents.map(|b| view! { <span class="muted">" / "{budget_text(b)}</span> })}
+                    <strong>{euro_text(l.actual_cents)}</strong>
+                    {l.budget_cents.map(|b| view! { <span class="muted">" / "{euro_text(b)}</span> })}
+                </div>
+                <div class="bc-flag">
+                    {flag.map(|(text, over)| view! { <span class="badge" class:over=over class:ok=!over>{text}</span> })}
                 </div>
             };
             if !l.group_line {
                 return view! { <div class=format!("bc-row {tone}") title=tip>{row}</div> }.into_any();
             }
-            // A group: its categories underneath, each with what it spent.
-            let members = l.members.into_iter().map(|m| view! {
-                <div class="bc-row sub">
-                    <div class="bc-label"><span>{line_name(m.category_id.as_deref(), &m.name)}</span></div>
-                    <div class="bc-track">
-                        <div class="bc-bar" style:width=pct(m.actual_cents)></div>
+            // A group: its categories underneath, each with what it spent and the month
+            // compared with.
+            let members = l.members.into_iter().map(|m| {
+                let was = prev_of(&m.category_id);
+                view! {
+                    <div class="bc-row sub">
+                        <div class="bc-label"><span>{line_name(m.category_id.as_deref(), &m.name)}</span></div>
+                        <div class="bc-track">
+                            <div class="bc-bar" style:width=pct(m.actual_cents)></div>
+                            {was.map(|w| view! { <div class="bc-before" style:width=pct(w)></div> })}
+                        </div>
+                        <div class="bc-value">
+                            <strong>{euro_text(m.actual_cents)}</strong>
+                        </div>
+                        <div class="bc-flag"></div>
                     </div>
-                    <div class="bc-value">
-                        <strong>"€ "{budget_text(m.actual_cents)}</strong>
-                    </div>
-                </div>
+                }
             }).collect_view();
             view! {
                 <details class=format!("bc-item group {tone}")>

@@ -6,6 +6,17 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-01
+
+### Changed
+
+- Overview lines read like a table: the amount and budget both with €, then one
+  status per line in its own column (over budget or on budget) instead of a
+  badge with the amount over. The category count on group lines is gone, so the
+  names get the room.
+- An opened group's categories compare with the chosen month too, with a bit
+  more space between them.
+
 ## [2.1.1] - 2026-10-01
 
 ### Fixed
@@ -81,6 +92,7 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.1.2]: https://github.com/mikepage/fin/releases/tag/v2.1.2
 [2.1.1]: https://github.com/mikepage/fin/releases/tag/v2.1.1
 [2.1.0]: https://github.com/mikepage/fin/releases/tag/v2.1.0
 [2.0.0]: https://github.com/mikepage/fin/releases/tag/v2.0.0
