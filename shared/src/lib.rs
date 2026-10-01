@@ -557,14 +557,14 @@ pub struct Budget {
     pub amount_cents: i64,
 }
 
-/// Budget for all fixed or all variable categories of one group ("Transport") in one
-/// month, in positive cents: their total. A category inside may keep a budget of its
-/// own; it counts within this one, and the rest is shared by the others.
+/// Budget for all variable categories of one group ("Transport") in one month, in
+/// positive cents: their total. Variable costs are only budgeted this way; income and
+/// fixed costs per category.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GroupBudget {
     /// The group's name, as in `Category::group`.
     pub group: String,
-    /// Fixed or Variable.
+    /// Variable (a group budget of another kind left in an older file counts nowhere).
     pub kind: CategoryKind,
     /// `YYYY-MM`
     pub month: String,
@@ -682,8 +682,8 @@ pub struct BudgetLine {
     /// `category_id` is `None`.
     #[serde(default)]
     pub group_line: bool,
-    /// For a group line: the categories it holds, with what each spent and its own
-    /// budget. Empty for every other line.
+    /// For a group line: the categories it holds, with what each spent. Empty for
+    /// every other line.
     #[serde(default)]
     pub members: Vec<GroupMember>,
 }
@@ -704,9 +704,6 @@ pub struct GroupMember {
     pub category_id: Option<String>,
     pub name: String,
     pub actual_cents: i64,
-    /// Its own budget within the group's.
-    #[serde(default)]
-    pub budget_cents: Option<i64>,
 }
 
 /// Progress bar fractions (0.0–1.0): `fill` is the blue part, `over` the overshoot
@@ -786,7 +783,9 @@ impl BudgetOverview {
 impl Dataset {
     /// Budget vs actual for one month. Every category with a budget or with transactions
     /// gets a line, in category-list order. Uncategorised money goes to a
-    /// "No category" line: received under income, spent under variable.
+    /// "No category" line: received under income, spent under variable. Income and
+    /// fixed costs are budgeted per category, variable costs per group: the variable
+    /// lines carry no budget and the variable budget is the sum of the group budgets.
     pub fn budget_overview(&self, month: &str) -> BudgetOverview {
         let mut lines: Vec<BudgetLine> = Vec::new();
         let parts = self.parts();
@@ -798,8 +797,7 @@ impl Dataset {
                 .map(|t| t.amount_cents)
                 .sum();
             let has_tx = in_month.iter().any(|t| t.category_id.as_deref() == Some(c.id.as_str()));
-            // Disabled categories are hidden from budgets.
-            let budget = self.budget_for(&c.id, month).filter(|b| *b != 0 && !c.disabled);
+            let budget = self.own_budget(c, month);
             if !has_tx && budget.is_none() {
                 continue;
             }
@@ -842,9 +840,8 @@ impl Dataset {
         let (mut budget, mut actual) = (KindTotals::default(), KindTotals::default());
         let (mut income, mut fixed, mut variable, mut investment) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for l in lines {
-            // A category inside a group budget counts through the group's (added below).
-            let grouped = self.category(l.category_id.as_deref()).is_some_and(|c| self.in_group_budget(c, month));
-            let b = if grouped { 0 } else { l.budget_cents.unwrap_or(0) };
+            // Variable lines carry no budget: theirs is the group's (added below).
+            let b = l.budget_cents.unwrap_or(0);
             let (bt, at, list) = match l.kind {
                 // Irregular income is income too (in totals and the net result), just not budgeted.
                 CategoryKind::Income | CategoryKind::IrregularIncome => (&mut budget.income, &mut actual.income, &mut income),
@@ -857,28 +854,18 @@ impl Dataset {
             *at += l.actual_cents;
             list.push(l);
         }
-        for g in self.group_budgets_in(month) {
-            match g.kind {
-                CategoryKind::Fixed => budget.fixed += g.amount_cents,
-                CategoryKind::Variable => budget.variable += g.amount_cents,
-                _ => {}
-            }
-        }
+        budget.variable += self.group_budgets_in(month).map(|g| g.amount_cents).sum::<i64>();
         BudgetOverview { month: month.to_string(), budget, actual, income, fixed, variable, investment }
     }
 
-    /// Like `budget_overview`, but each group with a group budget that month gets one
-    /// line per kind instead of its categories' lines: the group's budget against what
-    /// they spent together, with the categories (and their own budgets) in `members`.
-    /// The line takes the place of the group's first category. Totals don't change.
+    /// Like `budget_overview`, but each variable group with a group budget that month
+    /// gets one line instead of its categories' lines: the group's budget against what
+    /// they spent together, with the categories in `members`. The line takes the place
+    /// of the group's first category. Totals don't change.
     pub fn budget_overview_grouped(&self, month: &str) -> BudgetOverview {
         let mut o = self.budget_overview(month);
         for g in self.group_budgets_in(month) {
-            let list = match g.kind {
-                CategoryKind::Fixed => &mut o.fixed,
-                CategoryKind::Variable => &mut o.variable,
-                _ => continue,
-            };
+            let list = &mut o.variable;
             let inside = |l: &BudgetLine| {
                 self.category(l.category_id.as_deref()).is_some_and(|c| !c.disabled && c.group == g.group && c.kind == g.kind)
             };
@@ -897,7 +884,7 @@ impl Dataset {
                     group_line: true,
                     members: members
                         .into_iter()
-                        .map(|l| GroupMember { category_id: l.category_id, name: l.name, actual_cents: l.actual_cents, budget_cents: l.budget_cents })
+                        .map(|l| GroupMember { category_id: l.category_id, name: l.name, actual_cents: l.actual_cents })
                         .collect(),
                 },
             );
@@ -905,8 +892,12 @@ impl Dataset {
         o
     }
 
-    /// The group budget of a group's fixed or variable categories in `month`.
+    /// The group budget of a group's variable categories in `month`. Only variable costs
+    /// have group budgets; one of another kind left in a file doesn't count.
     pub fn group_budget_for(&self, group: &str, kind: CategoryKind, month: &str) -> Option<i64> {
+        if kind != CategoryKind::Variable {
+            return None;
+        }
         self.group_budgets
             .iter()
             .find(|b| b.group == group && b.kind == kind && b.month == month)
@@ -915,31 +906,32 @@ impl Dataset {
     }
 
     /// The group budgets that count in `month`: those whose group still has switched-on
-    /// categories of that kind.
+    /// variable categories.
     pub fn group_budgets_in<'a>(&'a self, month: &'a str) -> impl Iterator<Item = &'a GroupBudget> + 'a {
         self.group_budgets.iter().filter(move |g| g.month == month && self.group_budget_counts(g))
     }
 
-    /// Whether a group budget counts: nonzero, and its group still has switched-on
-    /// categories of its kind.
+    /// Whether a group budget counts: variable, nonzero, and its group still has
+    /// switched-on variable categories.
     pub fn group_budget_counts(&self, g: &GroupBudget) -> bool {
-        g.amount_cents != 0 && self.categories.iter().any(|c| !c.disabled && c.group == g.group && c.kind == g.kind)
+        g.kind == CategoryKind::Variable
+            && g.amount_cents != 0
+            && self.categories.iter().any(|c| !c.disabled && c.group == g.group && c.kind == g.kind)
     }
 
-    /// Whether a category counts through its group's budget in `month`.
+    /// Whether a variable category counts through its group's budget in `month`.
     pub fn in_group_budget(&self, c: &Category, month: &str) -> bool {
-        !c.disabled
-            && matches!(c.kind, CategoryKind::Fixed | CategoryKind::Variable)
-            && self.group_budget_for(&c.group, c.kind, month).is_some()
+        !c.disabled && self.group_budget_for(&c.group, c.kind, month).is_some()
     }
 
-    /// The own budgets of a group's switched-on categories of `kind` in `month`, together.
-    pub fn budgets_inside_group(&self, group: &str, kind: CategoryKind, month: &str) -> i64 {
-        self.categories
-            .iter()
-            .filter(|c| !c.disabled && c.group == group && c.kind == kind)
-            .filter_map(|c| self.budget_for(&c.id, month))
-            .sum()
+    /// A category's own budget in `month`: income, fixed costs (and investments) only.
+    /// Variable categories are budgeted per group, so a budget of theirs left in a file
+    /// doesn't count, nor does one of a switched-off category.
+    pub fn own_budget(&self, c: &Category, month: &str) -> Option<i64> {
+        if c.disabled || c.kind == CategoryKind::Variable {
+            return None;
+        }
+        self.budget_for(&c.id, month).filter(|b| *b != 0)
     }
 
     /// Variable spending per month at the current pace: the average of the six complete
@@ -970,9 +962,10 @@ impl Dataset {
     }
 
     /// How the year ends, with `current` (`YYYY-MM`) the month in progress: complete
-    /// months (before it) are actual; the current and later months get the budget (a
-    /// group budget once for its categories). A category budgeted in some months of the
-    /// year (quarterly child benefit, school instalments) gets nothing in the others;
+    /// months (before it) are actual; the current and later months get the budget: an
+    /// income or fixed category's own, a variable group's once for its categories. A
+    /// category budgeted in some months of the year (quarterly child benefit, school
+    /// instalments; for a variable one, through its group) gets nothing in the others;
     /// only one without any budget that year continues at its average over the
     /// complete months. An unfinished month isn't real yet. Investments and extra
     /// income only count as far as they happened.
@@ -998,11 +991,14 @@ impl Dataset {
                 }
             }
         }
-        // A category with a budget of its own, or a group budget, in some month of the year.
-        let prefix = format!("{year:04}-");
+        // Planned in some month of the year: an income or fixed category with a budget of
+        // its own, a variable one through its group's budget.
         let planned_in_year = |c: &Category| {
-            self.budgets.iter().any(|b| b.category_id == c.id && b.month.starts_with(&prefix) && b.amount_cents != 0)
-                || self.group_budgets.iter().any(|g| g.group == c.group && g.kind == c.kind && g.month.starts_with(&prefix) && g.amount_cents != 0)
+            if c.kind == CategoryKind::Variable {
+                months.iter().any(|m| self.in_group_budget(c, m))
+            } else {
+                months.iter().any(|m| self.own_budget(c, m).is_some())
+            }
         };
         months
             .iter()
@@ -1021,8 +1017,9 @@ impl Dataset {
                 for g in self.group_budgets_in(m) {
                     add(g.kind, g.amount_cents);
                 }
+                // Variable categories in a group budget are covered by it.
                 for c in self.categories.iter().filter(|c| c.budgetable() && !self.in_group_budget(c, m)) {
-                    match self.budget_for(&c.id, m).filter(|b| *b != 0) {
+                    match self.own_budget(c, m) {
                         Some(b) => add(c.kind, b),
                         // Budgeted elsewhere in the year: this month is planned at nothing.
                         None if planned_in_year(c) => {}
@@ -1528,7 +1525,10 @@ mod tests {
     #[test]
     fn budget_overview_totals_and_lines() {
         let o = budget_fixture().budget_overview("2026-09");
-        assert_eq!(o.budget, KindTotals { income: 325000, fixed: 129500, variable: 57000, investment: 0 });
+        // The variable categories' own budgets are leftovers: variable costs are
+        // budgeted per group, and the fixture has no group budget.
+        assert_eq!(o.budget, KindTotals { income: 325000, fixed: 129500, variable: 0, investment: 0 });
+        assert!(o.variable.iter().all(|l| l.budget_cents.is_none()));
         // food: 41230 - 1000 refund; plus 2000 uncategorised spending.
         assert_eq!(o.actual, KindTotals { income: 325700, fixed: 125000, variable: 40230 + 17900 + 2000, investment: 0 });
         let (open, saldo_open) = o.open();
@@ -1596,47 +1596,50 @@ mod tests {
         assert_eq!(inv.report_series(&months, &total)[1], ds.report_series(&months, &total)[1]);
         assert_eq!(o.actual.saldo(), saldo[1]);
 
-        // A group budget: G's variable categories (food 450 inside it, eating 120 inside
-        // it) share 700; the budget total counts the group's 700, not 450 + 120.
+        // A group budget: G's variable categories share 700; the budget total is the
+        // group's 700 (their own leftover budgets of 450 and 120 don't count).
         let mut gb = ds.clone();
         gb.group_budgets.push(GroupBudget { group: "G".into(), kind: CategoryKind::Variable, month: "2026-09".into(), amount_cents: 70000 });
         let plain = gb.budget_overview("2026-09");
         assert_eq!(plain.budget.variable, 70000);
-        assert_eq!(plain.budget.fixed, 129500, "fixed has no group budget");
-        assert_eq!(gb.budgets_inside_group("G", CategoryKind::Variable, "2026-09"), 57000);
+        assert_eq!(plain.budget.fixed, 129500);
         let grouped = gb.budget_overview_grouped("2026-09");
         let line = grouped.variable.iter().find(|l| l.group_line).unwrap();
         assert_eq!((line.name.as_str(), line.budget_cents, line.actual_cents), ("G", Some(70000), 40230 + 17900));
-        let food = line.members.iter().find(|m| m.name == "food").unwrap();
-        assert_eq!(food.budget_cents, Some(45000));
+        assert!(line.members.iter().any(|m| m.name == "food" && m.actual_cents == 40230));
         assert!(grouped.variable.iter().all(|l| l.name != "food" && l.name != "eating"));
         assert_eq!(grouped.variable.last().unwrap().name, NO_CATEGORY, "uncategorised stays its own line");
         assert_eq!((grouped.actual, grouped.budget), (plain.actual, plain.budget));
-        // Without switched-on categories of its kind a group budget counts nowhere.
-        let mut empty = gb.clone();
-        empty.group_budgets[0].kind = CategoryKind::Income;
-        assert_eq!(empty.budget_overview("2026-09").budget.variable, 57000);
-        // The forecast adds the group budget once instead of its categories.
+        // A group budget of another kind (fixed, left in a file) counts nowhere.
+        let mut fixed = gb.clone();
+        fixed.group_budgets[0].kind = CategoryKind::Fixed;
+        let o = fixed.budget_overview("2026-09");
+        assert_eq!((o.budget.fixed, o.budget.variable), (129500, 0));
+        assert!(fixed.budget_overview_grouped("2026-09").fixed.iter().all(|l| !l.group_line));
+        // The forecast adds the group budget once instead of its categories. December,
+        // without a group budget while G has one in other months, plans nothing for G.
         let mut gf = gb.clone();
         for m in ["2026-10", "2026-11"] {
             gf.group_budgets.push(GroupBudget { group: "G".into(), kind: CategoryKind::Variable, month: m.into(), amount_cents: 70000 });
         }
-        gf.categories.retain(|c| c.id != "unused");
         let f = gf.forecast(2026, "2026-10");
         let uncategorised = 2000 / 9; // its average over January–September
         assert_eq!(f[9].totals.variable, 70000 + uncategorised);
+        assert_eq!(f[11].totals.variable, uncategorised);
 
-        // Forecast: September actual, October at budget. Food and eating are budgeted in
-        // September only, so October plans nothing for them (as quarterly child benefit
-        // plans nothing in between); uncategorised spending, never budgeted, continues
-        // at its average.
+        // Forecast: September actual, October at budget. Salary is budgeted in September
+        // and October, so it plans its budget; food and eating have no group budget this
+        // year (their own budgets are leftovers), so they continue at their average, as
+        // does uncategorised spending.
         let mut fc = ds.clone();
         fc.budgets.push(Budget { category_id: "salary".into(), month: "2026-10".into(), amount_cents: 300000 });
         let f = fc.forecast(2026, "2026-10");
         assert!(f[8].actual && !f[9].actual);
         assert_eq!(f[8].totals, fc.budget_overview("2026-09").actual);
         assert_eq!(f[9].totals.income, 300000);
-        assert_eq!(f[9].totals.variable, 2000 / 9, "only uncategorised spending, at its average");
+        assert_eq!(f[9].totals.variable, 40230 / 9 + 17900 / 9 + 2000 / 9, "at their average");
+        // Rent, budgeted in September only, plans nothing in October.
+        assert_eq!(f[9].totals.fixed, 0);
 
         // At the current pace: the months to come spend what September (the only month
         // with spending in the six before October) spent, whatever the budget says.
@@ -1805,14 +1808,18 @@ mod tests {
     #[test]
     fn budget_bars() {
         let o = budget_fixture().budget_overview("2026-09");
-        let line = |n: &str| o.variable.iter().chain(&o.fixed).find(|l| l.name == n).unwrap().clone();
+        // The bars work the same for a group line; here on category lines with a budget.
+        let line = |n: &str, budget| BudgetLine {
+            budget_cents: Some(budget),
+            ..o.variable.iter().chain(&o.fixed).find(|l| l.name == n).unwrap().clone()
+        };
 
-        let food = line("food");
+        let food = line("food", 45000);
         assert!(!food.is_over());
         let bar = food.bar().unwrap();
         assert!((bar.fill - 40230.0 / 45000.0).abs() < 1e-9 && bar.over == 0.0);
 
-        let eating = line("eating"); // 17900 of 12000
+        let eating = line("eating", 12000); // 17900 of 12000
         assert!(eating.is_over());
         assert_eq!(eating.open_cents(), Some(-5900));
         let bar = eating.bar().unwrap();

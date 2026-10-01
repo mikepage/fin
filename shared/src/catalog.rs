@@ -11,6 +11,7 @@ pub mod groups {
     pub const HOUSEHOLD: &str = "household";
     pub const MEDICAL: &str = "medical";
     pub const INSURANCE: &str = "insurance";
+    pub const FINANCES: &str = "finances";
     pub const TELECOM: &str = "telecom";
     pub const SUBSCRIPTIONS: &str = "subscriptions";
     pub const TRANSPORT: &str = "transport";
@@ -56,11 +57,19 @@ pub mod ids {
     pub const CHARITY: &str = "sys-charity";
     pub const SHOPPING: &str = "sys-shopping";
     // Medical
-    pub const HEALTH_INSURANCE: &str = "sys-health_insurance";
     pub const DEDUCTIBLE: &str = "sys-deductible";
     pub const MEDICAL_OTHER: &str = "sys-medical_other";
     // Insurance
     pub const INSURANCE: &str = "sys-insurance";
+    pub const HEALTH_INSURANCE: &str = "sys-health_insurance";
+    pub const CAR_INSURANCE: &str = "sys-car_insurance";
+    pub const MOPED_BIKE_INSURANCE: &str = "sys-moped_bike_insurance";
+    // Finances
+    pub const ROAD_TAX: &str = "sys-road_tax";
+    pub const CAR_PURCHASE_LEASE: &str = "sys-car_purchase_lease";
+    pub const DEBT_REPAYMENT: &str = "sys-debt_repayment";
+    pub const BANK_FEES: &str = "sys-bank_fees";
+    pub const ALIMONY_PAID: &str = "sys-alimony_paid";
     // Telecom
     pub const INTERNET: &str = "sys-internet";
     pub const LANDLINE: &str = "sys-landline";
@@ -69,13 +78,9 @@ pub mod ids {
     pub const SUBSCRIPTIONS: &str = "sys-subscriptions";
     // Transport
     pub const FUEL: &str = "sys-fuel";
-    pub const CAR_INSURANCE: &str = "sys-car_insurance";
-    pub const ROAD_TAX: &str = "sys-road_tax";
     pub const VEHICLE_MAINTENANCE: &str = "sys-vehicle_maintenance";
     pub const PARKING_TOLLS: &str = "sys-parking_tolls";
-    pub const MOPED_BIKE_INSURANCE: &str = "sys-moped_bike_insurance";
     pub const PUBLIC_TRANSPORT: &str = "sys-public_transport";
-    pub const CAR_PURCHASE_LEASE: &str = "sys-car_purchase_lease";
     // Education
     pub const SCHOOL_COSTS: &str = "sys-school_costs";
     pub const COURSES: &str = "sys-courses";
@@ -89,13 +94,10 @@ pub mod ids {
     // Other expenses
     pub const INTERNAL_TRANSFERS: &str = "sys-internal_transfers";
     pub const SAVINGS_INVESTMENTS: &str = "sys-savings_investments";
-    pub const DEBT_REPAYMENT: &str = "sys-debt_repayment";
     pub const FINES: &str = "sys-fines";
     pub const OVERDRAFT_INTEREST: &str = "sys-overdraft_interest";
-    pub const BANK_FEES: &str = "sys-bank_fees";
     pub const CREDIT_CARD: &str = "sys-credit_card";
     pub const TAXES: &str = "sys-taxes";
-    pub const ALIMONY_PAID: &str = "sys-alimony_paid";
     pub const OTHER_TRANSFERS: &str = "sys-other_transfers";
     pub const PAYMENT_REQUESTS: &str = "sys-payment_requests";
     pub const OTHER_EXPENSES: &str = "sys-other_expenses";
@@ -138,22 +140,25 @@ pub const CATALOG: &[(&str, &str, CategoryKind)] = &[
     (PERSONAL_CARE, g::HOUSEHOLD, V),
     (CHARITY, g::HOUSEHOLD, V),
     (SHOPPING, g::HOUSEHOLD, V),
-    (HEALTH_INSURANCE, g::MEDICAL, F),
     (DEDUCTIBLE, g::MEDICAL, V),
     (MEDICAL_OTHER, g::MEDICAL, V),
     (INSURANCE, g::INSURANCE, F),
+    (HEALTH_INSURANCE, g::INSURANCE, F),
+    (CAR_INSURANCE, g::INSURANCE, F),
+    (MOPED_BIKE_INSURANCE, g::INSURANCE, F),
+    (ROAD_TAX, g::FINANCES, F),
+    (CAR_PURCHASE_LEASE, g::FINANCES, F),
+    (DEBT_REPAYMENT, g::FINANCES, F),
+    (BANK_FEES, g::FINANCES, F),
+    (ALIMONY_PAID, g::FINANCES, F),
     (INTERNET, g::TELECOM, F),
     (LANDLINE, g::TELECOM, F),
     (MOBILE, g::TELECOM, F),
     (SUBSCRIPTIONS, g::SUBSCRIPTIONS, F),
     (FUEL, g::TRANSPORT, V),
-    (CAR_INSURANCE, g::TRANSPORT, F),
-    (ROAD_TAX, g::TRANSPORT, F),
     (VEHICLE_MAINTENANCE, g::TRANSPORT, V),
     (PARKING_TOLLS, g::TRANSPORT, V),
-    (MOPED_BIKE_INSURANCE, g::TRANSPORT, F),
     (PUBLIC_TRANSPORT, g::TRANSPORT, V),
-    (CAR_PURCHASE_LEASE, g::TRANSPORT, F),
     (SCHOOL_COSTS, g::EDUCATION, F),
     (COURSES, g::EDUCATION, F),
     (CLOTHES, g::CLOTHING, V),
@@ -163,13 +168,10 @@ pub const CATALOG: &[(&str, &str, CategoryKind)] = &[
     (SPORT, g::LEISURE, V),
     (INTERNAL_TRANSFERS, g::OTHER_EXPENSES, T),
     (SAVINGS_INVESTMENTS, g::OTHER_EXPENSES, V),
-    (DEBT_REPAYMENT, g::OTHER_EXPENSES, F),
     (FINES, g::OTHER_EXPENSES, V),
     (OVERDRAFT_INTEREST, g::OTHER_EXPENSES, V),
-    (BANK_FEES, g::OTHER_EXPENSES, F),
     (CREDIT_CARD, g::OTHER_EXPENSES, V),
     (TAXES, g::OTHER_EXPENSES, V),
-    (ALIMONY_PAID, g::OTHER_EXPENSES, F),
     (OTHER_TRANSFERS, g::OTHER_EXPENSES, V),
     (PAYMENT_REQUESTS, g::OTHER_EXPENSES, V),
     (OTHER_EXPENSES, g::OTHER_EXPENSES, V),
@@ -184,4 +186,19 @@ pub fn group_of(id: &str) -> Option<&'static str> {
 
 pub fn key(id: &str) -> &str {
     id.strip_prefix("sys-").unwrap_or(id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fixed costs are budgeted per category and variable costs per group, so a group
+    /// holds one or the other, never both.
+    #[test]
+    fn no_group_mixes_fixed_and_variable() {
+        for &(_, group, _) in CATALOG {
+            let has = |k: CategoryKind| CATALOG.iter().any(|&(_, g, kind)| g == group && kind == k);
+            assert!(!(has(F) && has(V)), "group {group} has fixed and variable categories");
+        }
+    }
 }

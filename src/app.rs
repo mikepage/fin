@@ -1101,170 +1101,6 @@ fn ForecastTiles(year: RwSignal<i32>) -> impl IntoView {
     }
 }
 
-/// "Left to spend": per variable budget this month's budget against what has been spent,
-/// with where that should be by today and what is left (per day too). One month at a
-/// time, the current one first. Bars, then the same as a table.
-#[component]
-fn LeftToSpend(year: RwSignal<i32>) -> impl IntoView {
-    let ctx = expect_context::<Ctx>();
-    #[derive(Clone, PartialEq)]
-    struct Row {
-        name: String,
-        cat: Option<Category>,
-        budget: i64,
-        spent: i64,
-    }
-    let now = today();
-    let (this_year, this_month): (i32, u32) = (now[..4].parse().unwrap_or(2026), now[5..7].parse().unwrap_or(1));
-    let today_day: u32 = now[8..10].parse().unwrap_or(1);
-    // The month shown (1–12) in the page's year: this month this year, else December
-    // of a past year or January of a future one.
-    let pick = move |y: i32| match y.cmp(&this_year) {
-        std::cmp::Ordering::Equal => this_month,
-        std::cmp::Ordering::Less => 12,
-        std::cmp::Ordering::Greater => 1,
-    };
-    let month = RwSignal::new(pick(year.get_untracked()));
-    Effect::new(move |_| month.set(pick(year.get())));
-    let month_key = move || format!("{:04}-{:02}", year.get(), month.get());
-    // How far the month is (0.0–1.0), and the days still to go including today.
-    let progress = move || {
-        let (y, m) = (year.get(), month.get());
-        let days = days_in_month(y, m);
-        match (y, m).cmp(&(this_year, this_month)) {
-            std::cmp::Ordering::Less => (1.0, 0),
-            std::cmp::Ordering::Greater => (0.0, days),
-            std::cmp::Ordering::Equal => (today_day as f64 / days as f64, days - today_day + 1),
-        }
-    };
-    let rows = Memo::new(move |_| {
-        let month = month_key();
-        ctx.data.with(|d| {
-            let mut rows: Vec<Row> = d
-                .budget_overview_grouped(&month)
-                .variable
-                .into_iter()
-                .filter(|l| l.budget_cents.unwrap_or(0) > 0)
-                .map(|l| {
-                    let id = if l.group_line { l.members.first().and_then(|m| m.category_id.clone()) } else { l.category_id.clone() };
-                    let name = if l.group_line { l.name.clone() } else { line_name(l.category_id.as_deref(), &l.name) };
-                    Row { name, cat: d.category(id.as_deref()).cloned(), budget: l.budget_cents.unwrap_or(0), spent: l.actual_cents }
-                })
-                .collect();
-            rows.sort_by_key(|r| std::cmp::Reverse(r.budget));
-            rows
-        })
-    });
-    let should = move |r: &Row| (r.budget as f64 * progress().0) as i64;
-    // Over budget: by how much; otherwise what's left, orange when spending runs ahead
-    // of the month (beyond 2%).
-    let status = move |r: &Row| {
-        if r.spent > r.budget {
-            (format!("+{}", whole_euros(r.spent - r.budget)), true)
-        } else {
-            let ahead = r.spent > should(r) && !within_tolerance(r.spent - should(r), r.budget);
-            (format!("{} {}", whole_euros(r.budget - r.spent), t!("left")), ahead)
-        }
-    };
-    view! {
-        <section class="panel budget-section">
-            <div class="section-head">
-                <h2>
-                    <button class="round small" aria-label=t!("Previous month") disabled=move || month.get() == 1 on:click=move |_| month.update(|m| *m -= 1)>"‹"</button>
-                    " "{t!("Left to spend")}" · "{move || month_label(&month_key())}" "
-                    <button class="round small" aria-label=t!("Next month") disabled=move || month.get() == 12 on:click=move |_| month.update(|m| *m += 1)>"›"</button>
-                </h2>
-                <span class="muted">{move || match progress() {
-                    (_, 0) => t!("month over").to_string(),
-                    (_, days) => tn!(days, "{} day to go", "{} days to go", days),
-                }}</span>
-            </div>
-            <div class="bc">
-                {move || {
-                    let rs = rows.get();
-                    let max = rs.iter().map(|r| r.budget.max(r.spent)).max().unwrap_or(1).max(1) as f64;
-                    let pct = move |v: i64| format!("{:.2}%", (v.max(0) as f64 / max * 100.0).min(100.0));
-                    rs.into_iter().map(|r| {
-                        let (badge, warn) = status(&r);
-                        let should = should(&r);
-                        let tone = cat_tone(r.cat.as_ref());
-                        let tip = t!("by now about € {} of € {}", whole_euros(should), whole_euros(r.budget)).to_string();
-                        view! {
-                            <div class=format!("bc-row check {tone}") title=tip>
-                                <div class="bc-label">{cat_badge(r.cat.as_ref())}<span>{r.name.clone()}</span></div>
-                                <div class="bc-track">
-                                    <div class="bc-bar" style:width=pct(r.spent)></div>
-                                    <div class="bc-now" style:left=pct(should)></div>
-                                    <div class="bc-budget" style:left=pct(r.budget)></div>
-                                </div>
-                                <div class="bc-value">
-                                    <strong>{whole_euros(r.spent)}</strong>
-                                    <span class="muted">" / "{whole_euros(r.budget)}</span>
-                                </div>
-                                <div class="bc-status"><span class="badge" class:over=warn class:ok=!warn>{badge}</span></div>
-                            </div>
-                        }
-                    }).collect_view()
-                }}
-            </div>
-        </section>
-        <section class="panel table-card">
-            <table class="data-table">
-                <thead><tr>
-                    <th>{t!("Category")}</th>
-                    <th>{t!("Budget")}</th>
-                    <th>{t!("Spent")}</th>
-                    <th>{t!("By now")}</th>
-                    <th>{t!("Difference")}</th>
-                    <th>{t!("Left")}</th>
-                    <th>{t!("Left per day")}</th>
-                </tr></thead>
-                <tbody>
-                    {move || {
-                        let (_, days) = progress();
-                        rows.get().into_iter().map(|r| {
-                            let by_now = should(&r);
-                            let diff = r.spent - by_now;
-                            let left = r.budget - r.spent;
-                            view! {
-                                <tr>
-                                    <td>{r.name.clone()}</td>
-                                    <td>{whole_euros(r.budget)}</td>
-                                    <td>{whole_euros(r.spent)}</td>
-                                    <td>{whole_euros(by_now)}</td>
-                                    <td>{
-                                        // Against where spending should be by now, as a badge.
-                                        let (text, over) = if within_tolerance(diff, r.budget) || diff == 0 {
-                                            (t!("on budget").to_string(), false)
-                                        } else if diff > 0 {
-                                            (format!("€ {} {}", whole_euros(diff), t!("over")), true)
-                                        } else {
-                                            (format!("€ {} {}", whole_euros(-diff), t!("under")), false)
-                                        };
-                                        view! { <span class="badge" class:over=over class:ok=!over>{text}</span> }
-                                    }</td>
-                                    <td class:over={left < 0}>{whole_euros(left)}</td>
-                                    <td>{(days > 0 && left > 0).then(|| whole_euros(left / days as i64)).unwrap_or_else(|| "–".into())}</td>
-                                </tr>
-                            }
-                        }).collect_view()
-                    }}
-                </tbody>
-            </table>
-        </section>
-    }
-}
-
-/// Days in a month of a year.
-fn days_in_month(y: i32, m: u32) -> u32 {
-    match m {
-        2 if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    }
-}
-
 /// The plannable result per month against the budgeted result: fixed income minus
 /// fixed and variable costs, without extra income and investments (as in the year
 /// forecast). Bars for how much better or worse than budgeted, with the running
@@ -1473,41 +1309,22 @@ fn BudgetSection(
             if !l.group_line {
                 return view! { <div class=format!("bc-row {tone}") title=tip>{row}</div> }.into_any();
             }
-            // A group: its categories underneath, and the rest of the budget they share.
-            let own: i64 = l.members.iter().filter_map(|m| m.budget_cents).sum();
-            let shared: i64 = l.members.iter().filter(|m| m.budget_cents.is_none()).map(|m| m.actual_cents).sum();
-            let rest = l.budget_cents.unwrap_or(0) - own;
-            let members = l.members.into_iter().map(|m| {
-                let over = m.budget_cents.is_some_and(|b| m.actual_cents > b && !within_tolerance(b - m.actual_cents, b));
-                view! {
-                    <div class="bc-row sub">
-                        <div class="bc-label"><span>{line_name(m.category_id.as_deref(), &m.name)}</span></div>
-                        <div class="bc-track">
-                            <div class="bc-bar" style:width=pct(m.actual_cents)></div>
-                            {m.budget_cents.map(|b| view! { <div class="bc-budget" style:left=pct(b)></div> })}
-                        </div>
-                        <div class="bc-value" class:over=over>
-                            <strong>"€ "{budget_text(m.actual_cents)}</strong>
-                            {m.budget_cents.map(|b| view! { <span class="muted">" / "{budget_text(b)}</span> })}
-                        </div>
+            // A group: its categories underneath, each with what it spent.
+            let members = l.members.into_iter().map(|m| view! {
+                <div class="bc-row sub">
+                    <div class="bc-label"><span>{line_name(m.category_id.as_deref(), &m.name)}</span></div>
+                    <div class="bc-track">
+                        <div class="bc-bar" style:width=pct(m.actual_cents)></div>
                     </div>
-                }
+                    <div class="bc-value">
+                        <strong>"€ "{budget_text(m.actual_cents)}</strong>
+                    </div>
+                </div>
             }).collect_view();
             view! {
                 <details class=format!("bc-item group {tone}")>
                     <summary class="bc-row" title=tip>{row}</summary>
                     {members}
-                    <div class="bc-row sub rest">
-                        <div class="bc-label"><span>{t!("Shared rest")}</span></div>
-                        <div class="bc-track">
-                            <div class="bc-bar" style:width=pct(shared)></div>
-                            <div class="bc-budget" style:left=pct(rest)></div>
-                        </div>
-                        <div class="bc-value" class:over={shared > rest}>
-                            <strong>"€ "{budget_text(shared)}</strong>
-                            <span class="muted">" / "{budget_text(rest)}</span>
-                        </div>
-                    </div>
                 </details>
             }
             .into_any()
@@ -2660,16 +2477,16 @@ fn ImportDialog(open: RwSignal<bool>) -> impl IntoView {
     }
 }
 
-/// Categories that can get a budget, grouped; disabled categories and the transfer
-/// category (internal transfers) are left out.
-/// The budget grid's blocks: each group split by kind (income, fixed, variable), so a
-/// group budget's row only stands above the categories it covers.
+/// The budget grid's blocks: categories that can get a budget, per group split by kind
+/// (income, fixed, variable). Disabled categories, the transfer category (internal
+/// transfers) and the unsorted one are left out.
 fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
     grouped(ds)
         .into_iter()
         .flat_map(|(g, cats)| {
             [CategoryKind::Income, CategoryKind::Fixed, CategoryKind::Variable].into_iter().map(move |k| {
-                (g.clone(), cats.iter().filter(|c| c.budgetable() && c.kind == k).cloned().collect::<Vec<_>>())
+                let budgeted = |c: &&Category| c.budgetable() && c.kind == k && c.id != UNSORTED_CATEGORY_ID;
+                (g.clone(), cats.iter().filter(budgeted).cloned().collect::<Vec<_>>())
             })
         })
         .filter(|(_, cats)| !cats.is_empty())
@@ -2679,7 +2496,6 @@ fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
 #[derive(Clone, Copy, PartialEq)]
 enum BudgetTab {
     Result,
-    Left,
     Year,
     Plan,
 }
@@ -2689,10 +2505,10 @@ fn BudgetPage() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let year = RwSignal::new(ctx.month.get_untracked()[..4].parse::<i32>().unwrap_or(2026));
     let notice = RwSignal::new(None::<String>);
-    // Tabs: what's left to spend this month (the default), the year result with the
-    // result per month, the year forecast as a table, and Plan (the grid where budgets
-    // are entered).
-    let tab = RwSignal::new(BudgetTab::Left);
+    // Tabs: the year result with the result per month (the default), the year forecast
+    // as a table, and Plan (the grid where budgets are entered). Per month, the Overview
+    // shows what's left.
+    let tab = RwSignal::new(BudgetTab::Result);
     let planning = move || tab.get() == BudgetTab::Plan;
 
     // "From average": the last full months before this one.
@@ -2759,46 +2575,30 @@ fn BudgetPage() -> impl IntoView {
     let is_current = move |i: usize| year.get() == this_year && i == this_idx;
 
     let groups = Memo::new(move |_| ctx.data.with(budget_groups));
-    // Groups with a group budget fold their categories away; these are opened.
-    let unfolded = RwSignal::new(Vec::<String>::new());
-    let fold_key = |group: &str, kind: CategoryKind| format!("{}:{group}", kind.key());
-    let has_group_budget = move |group: &str, kind: CategoryKind| {
-        let prefix = format!("{:04}-", year.get());
-        ctx.data.with(|d| {
-            d.group_budgets
-                .iter()
-                .any(|g| g.group == group && g.kind == kind && g.month.starts_with(&prefix) && d.group_budget_counts(g))
-        })
-    };
-    let folded = move |group: &str, kind: CategoryKind| {
-        has_group_budget(group, kind) && !unfolded.with(|u| u.contains(&fold_key(group, kind)))
-    };
     // Budgeted per kind per month (switched-on categories): income, fixed, variable,
-    // investments. The summary rows and the result come from these.
+    // investments. The summary rows and the result come from these. Income and fixed
+    // costs per category, variable costs per group.
     let totals = Memo::new(move |_| {
         let prefix = format!("{:04}-", year.get());
         ctx.data.with(|d| {
             let mut t = [[0i64; 12]; 4];
             let month_index = |month: &str| month[5..].parse::<usize>().ok().filter(|m| (1..=12).contains(m)).map(|m| m - 1);
-            // A group budget counts instead of the budgets inside it.
             for g in d.group_budgets.iter().filter(|g| g.month.starts_with(&prefix) && d.group_budget_counts(g)) {
-                let row = if g.kind == CategoryKind::Fixed { 1 } else { 2 };
                 if let Some(i) = month_index(&g.month) {
-                    t[row][i] += g.amount_cents;
+                    t[2][i] += g.amount_cents;
                 }
             }
             for b in d.budgets.iter().filter(|b| b.month.starts_with(&prefix)) {
                 let Some(c) = d.category(Some(&b.category_id)) else { continue };
-                if d.in_group_budget(c, &b.month) {
+                if d.own_budget(c, &b.month).is_none() {
                     continue;
                 }
                 let row = match c.kind {
                     _ if !c.budgetable() => continue,
                     CategoryKind::Income => 0,
                     CategoryKind::Fixed => 1,
-                    CategoryKind::Variable => 2,
                     CategoryKind::Investment => 3,
-                    CategoryKind::IrregularIncome | CategoryKind::Transfer => continue,
+                    CategoryKind::Variable | CategoryKind::IrregularIncome | CategoryKind::Transfer => continue,
                 };
                 if let Ok(m @ 1..=12) = b.month[5..].parse::<usize>() {
                     t[row][m - 1] += b.amount_cents;
@@ -2893,10 +2693,10 @@ fn BudgetPage() -> impl IntoView {
         }
     };
 
-    // A group's budget for its fixed or variable categories together; the tooltip says
-    // what is left after their own budgets.
-    let group_cell = move |group: String, kind: CategoryKind, i: usize| {
-        let (g, g_change, g_title) = (group.clone(), group.clone(), group.clone());
+    // A group's budget for its variable categories together (`names` in the tooltip).
+    let group_cell = move |group: String, names: String, i: usize| {
+        let kind = CategoryKind::Variable;
+        let (g, g_change) = (group.clone(), group.clone());
         let label = format!("{} {} {}", group, kind_label(kind), i18n::month_short(i));
         view! {
             <input
@@ -2905,16 +2705,7 @@ fn BudgetPage() -> impl IntoView {
                 inputmode="decimal"
                 placeholder="–"
                 aria-label=label
-                title=move || {
-                    let month = month_at(year.get(), i);
-                    ctx.data.with(|d| {
-                        let inside = d.budgets_inside_group(&g_title, kind, &month);
-                        match d.group_budget_for(&g_title, kind, &month) {
-                            Some(b) => t!("Shared rest € {} after € {} of own budgets", budget_text(b - inside), budget_text(inside)).to_string(),
-                            None => t!("One budget for these categories together; their own budgets count within it").to_string(),
-                        }
-                    })
-                }
+                title=names
                 prop:value=move || {
                     let month = month_at(year.get(), i);
                     ctx.data.with(|d| d.group_budget_for(&g, kind, &month)).map(budget_text).unwrap_or_default()
@@ -2972,7 +2763,6 @@ fn BudgetPage() -> impl IntoView {
         <div class="filters">
             <div class="segmented" role="group" aria-label=t!("Budget")>
                 {[
-                    (BudgetTab::Left, t!("Left to spend")),
                     (BudgetTab::Result, t!("Year result")),
                     (BudgetTab::Year, t!("Year forecast")),
                     (BudgetTab::Plan, t!("Plan")),
@@ -2987,9 +2777,6 @@ fn BudgetPage() -> impl IntoView {
         <Show when=move || tab.get() == BudgetTab::Result>
             <ForecastTiles year=year/>
             <ResultByMonth year=year/>
-        </Show>
-        <Show when=move || tab.get() == BudgetTab::Left>
-            <LeftToSpend year=year/>
         </Show>
         <Show when=move || tab.get() == BudgetTab::Year>
             <Affordability year=year/>
@@ -3047,73 +2834,40 @@ fn BudgetPage() -> impl IntoView {
                 each=move || groups.get()
                 key=|g| g.clone()
                 children=move |(group, cats): (String, Vec<Category>)| {
-                    // Every block holds one kind of one group (see budget_groups).
+                    // Every block holds one kind of one group (see budget_groups). Variable
+                    // costs are budgeted per group: their block is the group budget's row
+                    // alone. Income and fixed costs are budgeted per category.
                     let kind = cats.first().map(|c| c.kind);
-                    // The group budget's row: for variable groups of more than one category,
-                    // and for fixed ones only once they have one (set with fin-cli; fixed
-                    // costs are budgeted per bill). With a group budget this year the
-                    // categories fold away under it, until opened.
-                    let group_row = kind
-                        .filter(|k| matches!(k, CategoryKind::Fixed | CategoryKind::Variable) && !group.is_empty())
-                        .filter(|_| cats.iter().all(|c| c.id != UNSORTED_CATEGORY_ID))
-                        .map(|k| {
-                            let (g, g_has, g_open, g_toggle, g_show) = (group.clone(), group.clone(), group.clone(), group.clone(), group.clone());
-                            let n = cats.len();
-                            let toggle = move |_| {
-                                let key = fold_key(&g_toggle, k);
-                                unfolded.update(|u| match u.iter().position(|x| *x == key) {
-                                    Some(i) => {
-                                        u.remove(i);
-                                    }
-                                    None => u.push(key),
-                                });
-                            };
-                            let hidden = move || !has_group_budget(&g_show, k) && (k == CategoryKind::Fixed || n < 2);
-                            view! {
-                                <div
-                                    class=format!("budget-row group-budget {}", cat_tone(cats.first()))
-                                    style:display=move || hidden().then_some("none")
-                                >
-                                    <span class="budget-name">
-                                        {move || match has_group_budget(&g_has, k) {
-                                            true => {
-                                                let open = unfolded.with(|u| u.contains(&fold_key(&g_open, k)));
-                                                let toggle = toggle.clone();
-                                                view! {
-                                                    <button
-                                                        class="link group-toggle"
-                                                        aria-expanded=open.to_string()
-                                                        title=tn!(n, "{} category", "{} categories", n)
-                                                        on:click=toggle
-                                                    >
-                                                        {if open { "▾ " } else { "▸ " }}{t!("Group budget")}" ("{n}")"
-                                                    </button>
-                                                }
-                                                .into_any()
-                                            }
-                                            false => view! { <span>{t!("Group budget")}</span> }.into_any(),
-                                        }}
-                                    </span>
-                                    {(0..12).map(|i| group_cell(g.clone(), k, i)).collect_view()}
+                    let rows = if kind == Some(CategoryKind::Variable) {
+                        let n = cats.len();
+                        let names = cats.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ");
+                        view! {
+                            <div class=format!("budget-row group-budget {}", cat_tone(cats.first()))>
+                                <span class="budget-name" title=names.clone()>
+                                    {t!("Group budget")}" "<span class="muted">{tn!(n, "{} category", "{} categories", n)}</span>
+                                </span>
+                                {(0..12).map(|i| group_cell(group.clone(), names.clone(), i)).collect_view()}
+                            </div>
+                        }
+                        .into_any()
+                    } else {
+                        cats.iter()
+                            .map(|c| view! {
+                                <div class=format!("budget-row tinted {}", cat_tone(Some(c)))>
+                                    <span class="budget-name" title=c.name.clone()>{cat_badge(Some(c))}<span>{c.name.clone()}</span></span>
+                                    {(0..12).map(|i| cell(c, i)).collect_view()}
                                 </div>
-                            }
-                        });
+                            })
+                            .collect_view()
+                            .into_any()
+                    };
                     let title = if group.is_empty() { t!("No group").to_string() } else { group };
                     view! {
                         <div class="budget-group">
                             {title}
                             {kind.map(|k| view! { <span class="muted">" · "{kind_label(k)}</span> })}
                         </div>
-                        {group_row}
-                        {cats.iter().map(|c| view! {
-                            <div class=format!("budget-row tinted {}", cat_tone(Some(c))) style:display={
-                                let (g, k) = (c.group.clone(), c.kind);
-                                move || folded(&g, k).then_some("none")
-                            }>
-                                <span class="budget-name" title=c.name.clone()>{cat_badge(Some(c))}<span>{c.name.clone()}</span></span>
-                                {(0..12).map(|i| cell(c, i)).collect_view()}
-                            </div>
-                        }).collect_view()}
+                        {rows}
                     }
                 }
             />
@@ -3258,6 +3012,15 @@ fn Categories() -> impl IntoView {
     let name = RwSignal::new(String::new());
     let group = RwSignal::new(String::new());
     let kind = RwSignal::new(CategoryKind::Variable);
+    // A group that holds fixed or variable costs sets the kind (see kind_options); a new
+    // group name leaves the choice free.
+    let locked = move || group.with(|g| ctx.data.with(|d| group_cost_kind(d, g, None)));
+    Effect::new(move |_| {
+        let g = group.get();
+        if let Some(k) = ctx.data.with_untracked(|d| group_cost_kind(d, &g, None)) {
+            kind.set(k);
+        }
+    });
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let (n, g, k) = (name.get_untracked(), group.get_untracked(), kind.get_untracked());
@@ -3312,7 +3075,7 @@ fn Categories() -> impl IntoView {
             <label>{t!("Kind")}
                 <ComboBox
                     label=t!("Kind")
-                    options=kind_options()
+                    options=Signal::derive(move || kind_options(locked()))
                     value=Signal::derive(move || kind.get().key().to_string())
                     on_change=move |v: String| kind.set(CategoryKind::from_key(&v).unwrap_or_default())
                 />
@@ -3348,8 +3111,33 @@ fn Categories() -> impl IntoView {
     }
 }
 
-fn kind_options() -> Vec<ComboOption> {
-    CategoryKind::SELECTABLE.into_iter().map(|k| ComboOption::new(k.key(), kind_label(k))).collect()
+/// The kinds a category can be given. A group holds fixed or variable costs, never
+/// both: in a group that already holds one (`locked`, see group_cost_kind) the other
+/// isn't offered.
+fn kind_options(locked: Option<CategoryKind>) -> Vec<ComboOption> {
+    let other = match locked {
+        Some(CategoryKind::Fixed) => Some(CategoryKind::Variable),
+        Some(CategoryKind::Variable) => Some(CategoryKind::Fixed),
+        _ => None,
+    };
+    CategoryKind::SELECTABLE
+        .into_iter()
+        .filter(|k| Some(*k) != other)
+        .map(|k| ComboOption::new(k.key(), kind_label(k)))
+        .collect()
+}
+
+/// Fixed or variable: the kind of costs a group's switched-on categories (other than
+/// `except`) hold, if any. Categories without a group aren't a group.
+fn group_cost_kind(ds: &Dataset, group: &str, except: Option<&str>) -> Option<CategoryKind> {
+    let group = group.trim();
+    if group.is_empty() {
+        return None;
+    }
+    ds.categories
+        .iter()
+        .filter(|c| !c.disabled && c.group == group && Some(c.id.as_str()) != except)
+        .find_map(|c| matches!(c.kind, CategoryKind::Fixed | CategoryKind::Variable).then_some(c.kind))
 }
 
 #[component]
@@ -3403,12 +3191,15 @@ fn CategoryRow(cat: Category, rules_open: RwSignal<Option<String>>) -> impl Into
                 // Standard categories keep the kind from the default list.
                 view! { <span class="fixed-kind" title=t!("A standard category's kind is fixed")>{kind_label(cat.kind)}</span> }.into_any()
             } else {
-                // Shows the new kind right away; the row redraws once it is saved.
+                // Shows the new kind right away; the row redraws once it is saved. Only
+                // the kinds its group allows.
                 let kind = RwSignal::new(cat.kind.key().to_string());
+                let (group, id) = (cat.group.clone(), cat.id.clone());
+                let options = Signal::derive(move || kind_options(ctx.data.with(|d| group_cost_kind(d, &group, Some(&id)))));
                 view! {
                     <ComboBox
                         label=t!("Kind")
-                        options=kind_options()
+                        options=options
                         value=kind
                         on_change=move |v: String| {
                             let k = CategoryKind::from_key(&v).unwrap_or_default();

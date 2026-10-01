@@ -35,8 +35,10 @@ fin-cli backups
 fin-cli categorize TX_ID CATEGORY
 fin-cli rule add CATEGORY iban|text|in|out VALUE [--apply-from 2026-01-01]
 fin-cli rule remove CATEGORY KIND VALUE
-fin-cli budget set CATEGORY 2026-10 350      # or "none" to clear
-fin-cli budget group Transport variable 2026-10 115   # or fixed; "none" to clear
+fin-cli budget set CATEGORY 2026-10 350      # income and fixed costs; "none" to clear
+fin-cli budget group Transport variable 2026-10 115   # variable costs; "none" to clear
+fin-cli category add NAME GROUP KIND         # KIND must match the group's fixed/variable
+fin-cli category group CATEGORY GROUP
 fin-cli budget average 2026 2026-09 6 [--overwrite]
 fin-cli import ACCOUNT file.xml...           # CAMT.053
 fin-cli undo-import IMPORT_ID
@@ -59,14 +61,16 @@ Category names in the output follow the app's language; messages are English.
   whole words, case- and punctuation-insensitive; `in`/`out` rules only match money
   in or out. Show the user what a rule will catch (`transactions --search VALUE`)
   before adding it.
-- Budgets are per month: set a year with a loop over the 12 months. A group can
-  have one fixed and one variable budget for its categories together (GROUP by
-  name in either language, or key like `transport`). A category's own budget
-  inside it counts within it; the rest is shared. Budgets must fit: a category
-  can't exceed its group budget, a group budget can't drop below the budgets
-  inside, and a year with income budgets can't go below zero (an increase is
-  capped, `"capped": true`, or refused). Lower budgets before raising others.
-  `budget average --overwrite` touches every category, fixed ones too.
+- Budgets are per month: set a year with a loop over the 12 months. Income and
+  fixed costs are budgeted per category (`budget set`), variable costs only per
+  group (`budget group GROUP variable`, GROUP by name in either language or key
+  like `transport`); `budget set` on a variable category is refused. A group holds
+  fixed or variable categories, never both (income, extra income and investments
+  can sit alongside), so `category add`/`category group` refuse a mix. A year with
+  income budgets can't go below zero (an increase is capped, `"capped": true`, or
+  refused). Lower budgets before raising others. `budget average` sets each
+  income/fixed category and each variable group (the sum of its categories'
+  averages); `--overwrite` touches all of them.
 - Ask before changes that are hard to undo: `restore`, `undo-import`, rules with
   `--apply-from`, or budget `--overwrite`. Writes are backed up daily, and imports
   and restores back up first.

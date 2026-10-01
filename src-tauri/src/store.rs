@@ -435,6 +435,7 @@ pub fn add_category(ds: &mut Dataset, name: &str, group: &str, kind: CategoryKin
         return Err("Choose a kind: income, extra income, fixed costs, variable or investment".into());
     }
     let group = group.trim().to_string();
+    check_group_kind(ds, None, &group, kind)?;
     let cat = Category { id: new_id(), name: clean_name(name)?, group, kind, ..Default::default() };
     match ds.categories.iter().rposition(|c| c.group == cat.group) {
         Some(i) => ds.categories.insert(i + 1, cat),
@@ -446,27 +447,45 @@ pub fn add_category(ds: &mut Dataset, name: &str, group: &str, kind: CategoryKin
 /// System categories keep their name, group and kind; only custom categories can change
 /// kind, between income, fixed and variable (the transfer kind belongs to "Internal
 /// transfers" alone). A category can only be disabled when no transaction uses it.
-/// Rules are managed with add/remove_category_rule, not here.
+/// Rules are managed with add/remove_category_rule, not here. Moving to another group
+/// or kind (or switching a custom category back on) has to respect the group's kind:
+/// see check_group_kind.
 pub fn update_category(ds: &mut Dataset, category: Category) -> Result<(), String> {
     let i = ds.categories.iter().position(|c| c.id == category.id).ok_or("Category not found")?;
     let before = ds.categories[i].clone();
     apply_category_update(ds, i, category)?;
-    // Moving into a group, or to another kind, has to fit that group's budget.
     let c = &ds.categories[i];
-    for b in ds.budgets.iter().filter(|b| b.category_id == c.id) {
-        if let Some(g) = ds.group_budget_for(&c.group, c.kind, &b.month).filter(|_| !c.disabled) {
-            if ds.budgets_inside_group(&c.group, c.kind, &b.month) > g {
-                let msg = format!(
-                    "Does not fit in the group budget of {} (€ {}): lower another budget in the group or raise the group budget first.",
-                    c.group,
-                    format_cents_in(g, Lang::En)
-                );
-                ds.categories[i] = before;
-                return Err(msg);
-            }
+    let moved = c.group != before.group || c.kind != before.kind || (before.disabled && !c.disabled && !c.system);
+    if moved && !c.disabled {
+        let (id, group, kind) = (c.id.clone(), c.group.clone(), c.kind);
+        if let Err(e) = check_group_kind(ds, Some(&id), &group, kind) {
+            ds.categories[i] = before;
+            return Err(e);
         }
     }
     Ok(())
+}
+
+/// A group holds fixed or variable costs, never both: fixed costs are budgeted per
+/// category, variable costs per group. Other kinds (income, extra income, investments)
+/// can sit alongside either. Only switched-on categories count; `except` is the
+/// category being changed. Categories without a group aren't a group.
+fn check_group_kind(ds: &Dataset, except: Option<&str>, group: &str, kind: CategoryKind) -> Result<(), String> {
+    if group.is_empty() {
+        return Ok(());
+    }
+    let holds = |k: CategoryKind| {
+        ds.categories.iter().any(|c| Some(c.id.as_str()) != except && !c.disabled && c.group == group && c.kind == k)
+    };
+    match kind {
+        CategoryKind::Fixed if holds(CategoryKind::Variable) => {
+            Err(format!("{group} holds variable costs: a fixed cost needs a group of fixed costs"))
+        }
+        CategoryKind::Variable if holds(CategoryKind::Fixed) => {
+            Err(format!("{group} holds fixed costs: a variable cost needs a group of variable costs"))
+        }
+        _ => Ok(()),
+    }
 }
 
 fn apply_category_update(ds: &mut Dataset, i: usize, category: Category) -> Result<(), String> {
@@ -533,8 +552,9 @@ fn next_month(month: &str) -> Result<String, String> {
     Ok(format!("{y:04}-{m:02}"))
 }
 
-/// The budgeted result of a year: income minus fixed, variable and investment budgets of
-/// the switched-on categories. A group budget counts instead of the budgets inside it.
+/// The budgeted result of a year: the income budgets minus the fixed and investment
+/// budgets of the switched-on categories and the variable group budgets. A variable
+/// category's own budget left in a file doesn't count.
 pub fn budget_year_result(ds: &Dataset, year: &str) -> i64 {
     let categories: i64 = ds
         .budgets
@@ -542,7 +562,7 @@ pub fn budget_year_result(ds: &Dataset, year: &str) -> i64 {
         .filter(|b| b.month.starts_with(year))
         .filter_map(|b| {
             ds.category(Some(&b.category_id))
-                .filter(|c| !c.disabled && !ds.in_group_budget(c, &b.month))
+                .filter(|c| ds.own_budget(c, &b.month).is_some())
                 .map(|c| (c.kind, b.amount_cents))
         })
         .map(|(kind, a)| match kind {
@@ -593,8 +613,9 @@ fn cap_to_year(ds: &Dataset, month: &str, sign: i64, old: i64, new: i64) -> Resu
     Ok(capped)
 }
 
-/// Sets or replaces a budget. `None` or 0 removes it. Inside a group budget the
-/// category budgets together stay within it; outside one the year result does.
+/// Sets or replaces an income or fixed category's budget. `None` or 0 removes it. The
+/// year result has to fit. Variable categories are budgeted per group
+/// (set_group_budget); removing a budget of theirs left in a file is still allowed.
 pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents: Option<i64>) -> Result<(), String> {
     if !valid_month(month) {
         return Err("Invalid month".into());
@@ -604,25 +625,16 @@ pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents
     if amount.is_some_and(|a| a < 0) {
         return Err("A budget cannot be negative".into());
     }
-    let old = ds.budget_for(category_id, month).unwrap_or(0);
-    let amount = if ds.in_group_budget(cat, month) {
-        let group = ds.group_budget_for(&cat.group, cat.kind, month).unwrap_or(0);
-        let others = ds.budgets_inside_group(&cat.group, cat.kind, month) - old;
-        if others + amount.unwrap_or(0) > group {
-            return Err(format!(
-                "Does not fit in the group budget of {} (€ {}): lower another budget in the group or raise the group budget first.",
-                cat.group,
-                format_cents_in(group, Lang::En)
-            ));
-        }
-        amount
-    } else {
-        match cat.kind {
-            _ if cat.disabled => amount,
-            CategoryKind::Income => Some(cap_to_year(ds, month, 1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
-            k if k.is_expense() => Some(cap_to_year(ds, month, -1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
-            _ => amount,
-        }
+    if amount.is_some() && cat.kind == CategoryKind::Variable {
+        return Err(format!("Variable categories are budgeted per group: set the budget on {}", cat.group));
+    }
+    let old = ds.own_budget(cat, month).unwrap_or(0);
+    let amount = match cat.kind {
+        _ if cat.disabled => amount,
+        CategoryKind::Variable => None,
+        CategoryKind::Income => Some(cap_to_year(ds, month, 1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
+        k if k.is_expense() => Some(cap_to_year(ds, month, -1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
+        _ => amount,
     };
     let existing = ds.budgets.iter().position(|b| b.category_id == category_id && b.month == month);
     match (existing, amount) {
@@ -640,36 +652,29 @@ pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents
     Ok(())
 }
 
-/// Sets or replaces the budget of a group's fixed or variable categories together.
-/// `None` or 0 removes it. It can't be lower than the categories' own budgets inside
-/// it, and the year result has to fit as with a category budget.
+/// Sets or replaces the budget of a group's variable categories together: variable
+/// costs are budgeted per group, fixed costs and income per category. `None` or 0
+/// removes it (also one of another kind left in a file). The year result has to fit as
+/// with a category budget.
 pub fn set_group_budget(ds: &mut Dataset, group: &str, kind: CategoryKind, month: &str, amount_cents: Option<i64>) -> Result<(), String> {
     if !valid_month(month) {
         return Err("Invalid month".into());
-    }
-    if !matches!(kind, CategoryKind::Fixed | CategoryKind::Variable) {
-        return Err("A group budget is for fixed or variable costs".into());
-    }
-    if !ds.categories.iter().any(|c| !c.disabled && c.group == group && c.kind == kind) {
-        return Err(format!("{group} has no categories of that kind"));
     }
     let amount = amount_cents.filter(|&a| a != 0);
     if amount.is_some_and(|a| a < 0) {
         return Err("A budget cannot be negative".into());
     }
-    let inside = ds.budgets_inside_group(group, kind, month);
-    if amount.is_some_and(|a| a < inside) {
-        return Err(format!(
-            "The categories in {group} already have € {} budgeted this month: the group budget can't be lower.",
-            format_cents_in(inside, Lang::En)
-        ));
+    if amount.is_some() {
+        if kind != CategoryKind::Variable {
+            return Err("Group budgets are for variable costs".into());
+        }
+        if !ds.categories.iter().any(|c| !c.disabled && c.group == group && c.kind == kind) {
+            return Err(format!("{group} has no categories of that kind"));
+        }
     }
-    // What the group counts for in the year result: its budget, or without one the
-    // budgets inside it.
-    let old = ds.group_budget_for(group, kind, month).unwrap_or(inside);
-    let new = amount.unwrap_or(inside);
-    let new = cap_to_year(ds, month, -1, old, new)?;
-    let amount = amount.map(|_| new);
+    let old = ds.group_budget_for(group, kind, month).unwrap_or(0);
+    let new = cap_to_year(ds, month, -1, old, amount.unwrap_or(0))?;
+    let amount = Some(new).filter(|a| *a != 0);
     let existing = ds.group_budgets.iter().position(|b| b.group == group && b.kind == kind && b.month == month);
     match (existing, amount) {
         (Some(i), Some(a)) => ds.group_budgets[i].amount_cents = a,
@@ -685,7 +690,9 @@ pub fn set_group_budget(ds: &mut Dataset, group: &str, kind: CategoryKind, month
 }
 
 /// Copies every budget of `year - 1` into the same month of `year`, but only where
-/// that category (or group) has no budget yet in that month. Returns how many were copied.
+/// that category (or group) has no budget yet in that month. Variable categories'
+/// own budgets left in a file and group budgets of another kind aren't copied: those
+/// don't count. Returns how many were copied.
 pub fn copy_budgets_from_previous_year(ds: &mut Dataset, year: i32) -> Result<usize, String> {
     if !(1001..=9999).contains(&year) {
         return Err("Invalid year".into());
@@ -695,13 +702,14 @@ pub fn copy_budgets_from_previous_year(ds: &mut Dataset, year: i32) -> Result<us
         .budgets
         .iter()
         .filter(|b| b.month.starts_with(&prefix))
+        .filter(|b| ds.category(Some(&b.category_id)).is_some_and(|c| c.kind != CategoryKind::Variable))
         .map(|b| Budget { month: format!("{year:04}{}", &b.month[4..]), ..b.clone() })
         .filter(|b| ds.budget_for(&b.category_id, &b.month).is_none())
         .collect();
     let groups: Vec<GroupBudget> = ds
         .group_budgets
         .iter()
-        .filter(|g| g.month.starts_with(&prefix))
+        .filter(|g| g.month.starts_with(&prefix) && g.kind == CategoryKind::Variable)
         .map(|g| GroupBudget { month: format!("{year:04}{}", &g.month[4..]), ..g.clone() })
         .filter(|g| !ds.group_budgets.iter().any(|x| x.group == g.group && x.kind == g.kind && x.month == g.month))
         .collect();
@@ -712,8 +720,10 @@ pub fn copy_budgets_from_previous_year(ds: &mut Dataset, year: i32) -> Result<us
 }
 
 /// Sets every month of `year` to each category's average over the `months_back` months
-/// ending with `last_month` (see Dataset::average_per_month). With `overwrite` false
-/// only months without a budget are filled. Returns how many budgets were set.
+/// ending with `last_month` (see Dataset::average_per_month); variable categories are
+/// budgeted per group, so each group of them gets the sum of their averages. With
+/// `overwrite` false only months without a budget are filled. Returns how many budgets
+/// were set.
 pub fn budgets_from_average(
     ds: &mut Dataset,
     year: i32,
@@ -727,8 +737,37 @@ pub fn budgets_from_average(
     if !valid_month(last_month) || !(1..=24).contains(&months_back) {
         return Err("Invalid period".into());
     }
-    let averages = ds.average_per_month(&months_ending(last_month, months_back as usize));
+    let mut averages = ds.average_per_month(&months_ending(last_month, months_back as usize));
+    // The variable categories' averages, summed per group.
+    let mut groups: Vec<(String, i64)> = Vec::new();
+    averages.retain(|(id, cents)| match ds.category(Some(id)) {
+        Some(c) if c.kind == CategoryKind::Variable => {
+            match groups.iter_mut().find(|(g, _)| *g == c.group) {
+                Some((_, sum)) => *sum += cents,
+                None => groups.push((c.group.clone(), *cents)),
+            }
+            false
+        }
+        _ => true,
+    });
     let mut set = 0;
+    for (group, cents) in groups {
+        for m in 1..=12 {
+            let month = format!("{year:04}-{m:02}");
+            let kind = CategoryKind::Variable;
+            match ds.group_budgets.iter_mut().find(|g| g.group == group && g.kind == kind && g.month == month) {
+                Some(g) if overwrite && g.amount_cents != cents => {
+                    g.amount_cents = cents;
+                    set += 1;
+                }
+                Some(_) => {}
+                None => {
+                    ds.group_budgets.push(GroupBudget { group: group.clone(), kind, month, amount_cents: cents });
+                    set += 1;
+                }
+            }
+        }
+    }
     for (category_id, cents) in averages {
         for m in 1..=12 {
             let month = format!("{year:04}-{m:02}");
@@ -755,25 +794,25 @@ pub fn copy_budget_month_to_next(ds: &mut Dataset, month: &str) -> Result<(), St
         return Err("Invalid month".into());
     }
     let next = next_month(month)?;
-    // Groups first, so the category budgets inside them fit.
     let groups: Vec<(String, CategoryKind, i64)> = ds
         .group_budgets
         .iter()
         .filter(|g| g.month == month && ds.group_budget_counts(g))
         .map(|g| (g.group.clone(), g.kind, g.amount_cents))
         .collect();
-    for (group, kind, amount) in &groups {
-        // Room for the categories' budgets to change after it.
-        let inside = ds.budgets_inside_group(group, *kind, &next);
-        set_group_budget(ds, group, *kind, &next, Some((*amount).max(inside)))?;
-    }
-    let source: Vec<(String, i64)> = ds
+    // The categories' own budgets (not a variable one's left in a file), income first
+    // so the spending after it fits in the year.
+    let mut source: Vec<(String, i64, bool)> = ds
         .budgets
         .iter()
         .filter(|b| b.month == month)
-        .map(|b| (b.category_id.clone(), b.amount_cents))
+        .filter_map(|b| {
+            let c = ds.category(Some(&b.category_id)).filter(|c| c.kind != CategoryKind::Variable)?;
+            Some((b.category_id.clone(), b.amount_cents, c.kind == CategoryKind::Income))
+        })
         .collect();
-    for (category_id, amount) in source {
+    source.sort_by_key(|(_, _, income)| !income);
+    for (category_id, amount, _) in source {
         set_budget(ds, &category_id, &next, Some(amount))?;
     }
     for (group, kind, amount) in groups {
@@ -1382,7 +1421,7 @@ mod tests {
         let mut ds = default_dataset();
         // Income first: expenses must fit in it (see budget_within_income).
         set_budget(&mut ds, ids::SALARY, "2026-01", Some(1_000_000)).unwrap();
-        let cat = ids::GROCERIES.to_string();
+        let cat = ids::RENT_MORTGAGE.to_string();
         let mine = |ds: &Dataset| ds.budgets.iter().filter(|b| b.category_id == cat).count();
         set_budget(&mut ds, &cat, "2026-09", Some(45000)).unwrap();
         set_budget(&mut ds, &cat, "2026-09", Some(50000)).unwrap();
@@ -1406,21 +1445,34 @@ mod tests {
     }
 
     #[test]
+    fn variable_categories_are_budgeted_per_group() {
+        let mut ds = default_dataset();
+        let err = set_budget(&mut ds, ids::GROCERIES, "2026-09", Some(100)).unwrap_err();
+        assert_eq!(err, "Variable categories are budgeted per group: set the budget on Huishouden");
+        // A budget of theirs left in a file doesn't count, and can still be removed.
+        ds.budgets.push(Budget { category_id: ids::GROCERIES.into(), month: "2026-09".into(), amount_cents: 100 });
+        assert_eq!(budget_year_result(&ds, "2026"), 0);
+        set_budget(&mut ds, ids::GROCERIES, "2026-09", Some(0)).unwrap();
+        assert!(ds.budgets.is_empty());
+    }
+
+    #[test]
     fn budget_within_income() {
         let mut ds = default_dataset();
         set_budget(&mut ds, ids::SALARY, "2026-01", Some(100_000)).unwrap();
-        set_budget(&mut ds, ids::GROCERIES, "2026-02", Some(60_000)).unwrap();
+        set_budget(&mut ds, ids::RENT_MORTGAGE, "2026-02", Some(60_000)).unwrap();
         // Too much for what is left of the year's income: capped to the room (€ 400).
-        set_budget(&mut ds, ids::SHOPPING, "2026-03", Some(90_000)).unwrap();
-        assert_eq!(ds.budget_for(ids::SHOPPING, "2026-03"), Some(40_000));
+        set_budget(&mut ds, ids::INTERNET, "2026-03", Some(90_000)).unwrap();
+        assert_eq!(ds.budget_for(ids::INTERNET, "2026-03"), Some(40_000));
         assert_eq!(budget_year_result(&ds, "2026"), 0);
         // No room left: more is refused, less is fine.
-        assert!(set_budget(&mut ds, ids::SHOPPING, "2026-04", Some(100)).is_err());
+        assert!(set_budget(&mut ds, ids::INTERNET, "2026-04", Some(100)).is_err());
+        assert!(set_group_budget(&mut ds, "Huishouden", CategoryKind::Variable, "2026-04", Some(100)).is_err());
         assert!(set_budget(&mut ds, ids::SALARY, "2026-01", Some(50_000)).is_err(), "income can't drop below the spending");
-        set_budget(&mut ds, ids::GROCERIES, "2026-02", Some(50_000)).unwrap();
+        set_budget(&mut ds, ids::RENT_MORTGAGE, "2026-02", Some(50_000)).unwrap();
         assert_eq!(budget_year_result(&ds, "2026"), 10_000);
         // Other years are separate; one without budgeted income isn't capped.
-        set_budget(&mut ds, ids::GROCERIES, "2027-01", Some(100)).unwrap();
+        set_budget(&mut ds, ids::RENT_MORTGAGE, "2027-01", Some(100)).unwrap();
     }
 
     #[test]
@@ -1429,60 +1481,85 @@ mod tests {
         let mut ds = default_dataset();
         let m = "2026-01";
         set_budget(&mut ds, ids::SALARY, m, Some(100_000)).unwrap();
-        set_budget(&mut ds, ids::FUEL, m, Some(8_500)).unwrap();
-        set_budget(&mut ds, ids::PARKING_TOLLS, m, Some(1_000)).unwrap();
-        // Not lower than the budgets inside; the group budget replaces them in the year.
-        assert!(set_group_budget(&mut ds, "Vervoer", Variable, m, Some(9_000)).is_err());
         set_group_budget(&mut ds, "Vervoer", Variable, m, Some(11_500)).unwrap();
         assert_eq!(budget_year_result(&ds, "2026"), 100_000 - 11_500);
         assert_eq!(ds.budget_overview(m).budget.variable, 11_500);
-        // Inside it, a category's budget can grow into the rest but not past the group.
-        set_budget(&mut ds, ids::PARKING_TOLLS, m, Some(3_000)).unwrap();
-        assert!(set_budget(&mut ds, ids::PARKING_TOLLS, m, Some(3_001)).is_err());
-        assert_eq!(budget_year_result(&ds, "2026"), 100_000 - 11_500, "inside the group: no change");
-        // Fixed is separate: road tax isn't in the variable budget.
+        // Fixed is separate, per category: road tax isn't in the variable budget.
         set_budget(&mut ds, ids::ROAD_TAX, m, Some(4_000)).unwrap();
         assert_eq!(budget_year_result(&ds, "2026"), 100_000 - 11_500 - 4_000);
-        assert!(set_group_budget(&mut ds, "Vervoer", Fixed, m, Some(3_000)).is_err());
-        assert!(set_group_budget(&mut ds, "Vervoer", CategoryKind::Income, m, Some(3_000)).is_err());
+        assert_eq!(set_group_budget(&mut ds, "Financiën", Fixed, m, Some(3_000)).unwrap_err(), "Group budgets are for variable costs");
+        assert!(set_group_budget(&mut ds, "Inkomsten", CategoryKind::Income, m, Some(3_000)).is_err());
         assert!(set_group_budget(&mut ds, "Nergens", Variable, m, Some(3_000)).is_err());
+        // A fixed group budget left in a file counts nowhere and can be removed.
+        ds.group_budgets.push(GroupBudget { group: "Financiën".into(), kind: Fixed, month: m.into(), amount_cents: 5_000 });
+        assert_eq!(budget_year_result(&ds, "2026"), 100_000 - 11_500 - 4_000);
+        set_group_budget(&mut ds, "Financiën", Fixed, m, None).unwrap();
+        assert_eq!(ds.group_budgets.len(), 1);
         // The year cap applies to the group budget too.
         assert!(set_group_budget(&mut ds, "Vervoer", Variable, m, Some(200_000)).is_ok());
         assert_eq!(ds.group_budget_for("Vervoer", Variable, m), Some(96_000), "capped to the room");
         assert_eq!(budget_year_result(&ds, "2026"), 0);
-        // Removing it: the categories count on their own again.
         set_group_budget(&mut ds, "Vervoer", Variable, m, None).unwrap();
-        assert_eq!(budget_year_result(&ds, "2026"), 100_000 - 8_500 - 3_000 - 4_000);
+        assert_eq!(budget_year_result(&ds, "2026"), 100_000 - 4_000);
 
-        // Copying: a month to the next and a year to the next take group budgets along.
+        // Copying: a month to the next and a year to the next take group budgets along,
+        // but not a variable category's budget left in a file.
         set_group_budget(&mut ds, "Vervoer", Variable, m, Some(12_000)).unwrap();
+        ds.budgets.push(Budget { category_id: ids::FUEL.into(), month: m.into(), amount_cents: 700 });
         copy_budget_month_to_next(&mut ds, m).unwrap();
         assert_eq!(ds.group_budget_for("Vervoer", Variable, "2026-02"), Some(12_000));
-        assert_eq!(ds.budget_for(ids::PARKING_TOLLS, "2026-02"), Some(3_000));
+        assert_eq!(ds.budget_for(ids::ROAD_TAX, "2026-02"), Some(4_000));
+        assert_eq!(ds.budget_for(ids::FUEL, "2026-02"), None);
         assert!(copy_budgets_from_previous_year(&mut ds, 2027).unwrap() > 0);
         assert_eq!(ds.group_budget_for("Vervoer", Variable, "2027-01"), Some(12_000));
+        assert_eq!(ds.budget_for(ids::FUEL, "2027-01"), None);
 
         // A language switch renames the group budget with its group.
         set_language(&mut ds, Lang::En).unwrap();
         assert_eq!(ds.group_budget_for("Transport", Variable, m), Some(12_000));
         set_language(&mut ds, Lang::Nl).unwrap();
         assert_eq!(ds.group_budget_for("Vervoer", Variable, m), Some(12_000));
+    }
 
-        // A custom category moving into the group has to fit its budget.
-        add_category(&mut ds, "Fietsen", "Eigen", Variable).unwrap();
+    #[test]
+    fn groups_hold_fixed_or_variable_costs() {
+        use CategoryKind::{Fixed, Investment, Variable};
+        let mut ds = default_dataset();
+        // Adding: the kind has to match the group's.
+        assert_eq!(
+            add_category(&mut ds, "Parkeervergunning", "Vervoer", Fixed).unwrap_err(),
+            "Vervoer holds variable costs: a fixed cost needs a group of fixed costs"
+        );
+        assert_eq!(
+            add_category(&mut ds, "Boetes", "Financiën", Variable).unwrap_err(),
+            "Financiën holds fixed costs: a variable cost needs a group of variable costs"
+        );
+        add_category(&mut ds, "Fietsen", "Vervoer", Variable).unwrap();
+        add_category(&mut ds, "Lening", "Financiën", Fixed).unwrap();
+        add_category(&mut ds, "Zonnepanelen", "Vervoer", Investment).unwrap();
+        add_category(&mut ds, "Eigen", "Nieuw", Fixed).unwrap();
+
+        // Changing group or kind: the same, and a refused change leaves it as it was.
         let mut bike = ds.categories.iter().find(|c| c.name == "Fietsen").unwrap().clone();
-        set_budget(&mut ds, &bike.id, m, Some(1_000)).unwrap();
-        bike.group = "Vervoer".into();
-        assert!(update_category(&mut ds, bike.clone()).is_err());
-        assert_eq!(ds.category(Some(&bike.id)).unwrap().group, "Eigen", "left as it was");
-        set_budget(&mut ds, &bike.id, m, Some(500)).unwrap();
+        bike.kind = Fixed;
+        assert!(update_category(&mut ds, bike.clone()).unwrap_err().starts_with("Vervoer holds variable costs"));
+        assert_eq!(ds.category(Some(&bike.id)).unwrap().kind, Variable, "left as it was");
+        bike.kind = Variable;
+        bike.group = "Financiën".into();
+        assert!(update_category(&mut ds, bike.clone()).unwrap_err().starts_with("Financiën holds fixed costs"));
+        assert_eq!(ds.category(Some(&bike.id)).unwrap().group, "Vervoer", "left as it was");
+        // A group of its own kind, or one being emptied of the other kind, is fine.
+        bike.group = "Huishouden".into();
         update_category(&mut ds, bike).unwrap();
+        let mut own = ds.categories.iter().find(|c| c.name == "Eigen").unwrap().clone();
+        own.kind = Variable;
+        update_category(&mut ds, own).unwrap();
     }
 
     #[test]
     fn copy_budgets_from_previous_year_does_not_overwrite() {
         let mut ds = default_dataset();
-        let (a, b) = (ds.categories[20].id.clone(), ds.categories[21].id.clone());
+        let (a, b) = (ids::RENT_MORTGAGE.to_string(), ids::INTERNET.to_string());
         for m in 1..=12 {
             set_budget(&mut ds, &a, &format!("2025-{m:02}"), Some(1000 * m)).unwrap();
         }
@@ -1506,7 +1583,7 @@ mod tests {
     #[test]
     fn copy_budget_month_to_next_overwrites_and_rolls_over_year() {
         let mut ds = default_dataset();
-        let (a, b, c) = (ds.categories[20].id.clone(), ds.categories[21].id.clone(), ds.categories[22].id.clone());
+        let (a, b, c) = (ids::RENT_MORTGAGE.to_string(), ids::INTERNET.to_string(), ids::MOBILE.to_string());
         set_budget(&mut ds, &a, "2026-09", Some(100)).unwrap();
         set_budget(&mut ds, &b, "2026-09", Some(200)).unwrap();
         set_budget(&mut ds, &a, "2026-10", Some(5)).unwrap();
@@ -1531,8 +1608,16 @@ mod tests {
         add_account(&mut ds, "A", None).unwrap();
         let acc = ds.accounts[0].id.clone();
         let food = ids::GROCERIES.to_string();
+        let cash = ids::CASH_WITHDRAWALS.to_string();
+        let rent = ids::RENT_MORTGAGE.to_string();
         let transfer = ids::INTERNAL_TRANSFERS.to_string();
-        for (date, cat, cents) in [("2026-07-03", &food, -30000), ("2026-08-03", &food, -60000), ("2026-08-04", &transfer, -99900)] {
+        for (date, cat, cents) in [
+            ("2026-07-03", &food, -30000),
+            ("2026-08-03", &food, -60000),
+            ("2026-08-05", &cash, -15000),
+            ("2026-08-01", &rent, -90000),
+            ("2026-08-04", &transfer, -99900),
+        ] {
             save_transaction(&mut ds, TransactionInput {
                 id: None,
                 date: date.into(),
@@ -1543,16 +1628,23 @@ mod tests {
             })
             .unwrap();
         }
-        set_budget(&mut ds, &food, "2026-12", Some(1)).unwrap();
+        set_budget(&mut ds, &rent, "2026-12", Some(1)).unwrap();
+        ds.group_budgets.push(GroupBudget { group: "Huishouden".into(), kind: CategoryKind::Variable, month: "2026-12".into(), amount_cents: 1 });
+        let household = |ds: &Dataset, m: &str| ds.group_budget_for("Huishouden", CategoryKind::Variable, m);
 
-        // Three months up to August: (300 + 600 + 0) / 3 = 300.
-        assert_eq!(budgets_from_average(&mut ds, 2026, "2026-08", 3, false).unwrap(), 11);
-        assert_eq!(ds.budget_for(&food, "2026-01"), Some(30000));
-        assert_eq!(ds.budget_for(&food, "2026-12"), Some(1), "existing budget kept");
+        // Three months up to August. Rent: 900 / 3 = 300, per category. Groceries
+        // (300 + 600) / 3 = 300 and cash 150 / 3 = 50: together 350 for Huishouden.
+        assert_eq!(budgets_from_average(&mut ds, 2026, "2026-08", 3, false).unwrap(), 22);
+        assert_eq!(ds.budget_for(&rent, "2026-01"), Some(30000));
+        assert_eq!(household(&ds, "2026-01"), Some(35000));
+        assert_eq!(ds.budget_for(&food, "2026-01"), None, "variable categories get no budget of their own");
+        assert_eq!(ds.budget_for(&rent, "2026-12"), Some(1), "existing budget kept");
+        assert_eq!(household(&ds, "2026-12"), Some(1), "existing group budget kept");
         assert_eq!(ds.budget_for(&transfer, "2026-01"), None, "transfers get no budget");
 
-        assert_eq!(budgets_from_average(&mut ds, 2026, "2026-08", 3, true).unwrap(), 1);
-        assert_eq!(ds.budget_for(&food, "2026-12"), Some(30000), "overwritten");
+        assert_eq!(budgets_from_average(&mut ds, 2026, "2026-08", 3, true).unwrap(), 2);
+        assert_eq!(ds.budget_for(&rent, "2026-12"), Some(30000), "overwritten");
+        assert_eq!(household(&ds, "2026-12"), Some(35000), "overwritten");
         assert_eq!(budgets_from_average(&mut ds, 2026, "2026-08", 3, true).unwrap(), 0, "nothing left to change");
         assert!(budgets_from_average(&mut ds, 2026, "2026-13", 3, false).is_err());
         assert!(budgets_from_average(&mut ds, 2026, "2026-08", 0, false).is_err());
@@ -1563,9 +1655,11 @@ mod tests {
         let mut ds = default_dataset();
         add_category(&mut ds, "Hond", "Huishouden", CategoryKind::Variable).unwrap();
         let a = ds.categories.iter().find(|c| c.name == "Hond").unwrap().id.clone();
-        let b = ds.categories[21].id.clone();
-        set_budget(&mut ds, &a, "2026-09", Some(100)).unwrap();
-        set_budget(&mut ds, &a, "2026-10", Some(100)).unwrap();
+        let b = ids::RENT_MORTGAGE.to_string();
+        // Budgets of a variable category left in a file.
+        for m in ["2026-09", "2026-10"] {
+            ds.budgets.push(Budget { category_id: a.clone(), month: m.into(), amount_cents: 100 });
+        }
         set_budget(&mut ds, &b, "2026-09", Some(200)).unwrap();
         delete_category(&mut ds, &a).unwrap();
         assert_eq!(ds.budgets.len(), 1);
@@ -1586,9 +1680,9 @@ mod tests {
         assert!(store.data.budgets.is_empty());
         assert_eq!(store.data.categories.len(), catalog::CATALOG.len() + 1, "the catalog is added");
 
-        store.mutate(|ds| set_budget(ds, ids::GROCERIES, "2026-09", Some(45000))).unwrap();
+        store.mutate(|ds| set_budget(ds, ids::RENT_MORTGAGE, "2026-09", Some(45000))).unwrap();
         let reloaded = Store::load(path).unwrap();
-        assert_eq!(reloaded.data.budget_for(ids::GROCERIES, "2026-09"), Some(45000));
+        assert_eq!(reloaded.data.budget_for(ids::RENT_MORTGAGE, "2026-09"), Some(45000));
     }
 
     #[test]
@@ -1682,7 +1776,7 @@ mod tests {
         assert!(add_category(&mut ds, "Spaar", "Overig", CategoryKind::Transfer).is_err());
         add_category(&mut ds, "Hond", "Huishouden", CategoryKind::Variable).unwrap();
         let mut dog = ds.categories.iter().find(|c| c.name == "Hond").unwrap().clone();
-        dog.kind = CategoryKind::Fixed;
+        dog.kind = CategoryKind::Investment;
         update_category(&mut ds, dog.clone()).unwrap();
         dog.kind = CategoryKind::Transfer;
         assert!(update_category(&mut ds, dog).is_err());

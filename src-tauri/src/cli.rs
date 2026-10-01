@@ -60,14 +60,17 @@ Changing
                                     categorised ones from that date
   rule remove CATEGORY KIND VALUE
   category add NAME GROUP KIND      a custom category; KIND = income, irregularincome,
-                                    fixed, variable or investment
-  category group CATEGORY GROUP     move a custom category to another group
+                                    fixed, variable or investment. A group holds fixed
+                                    or variable costs, never both
+  category group CATEGORY GROUP     move a custom category to another group (of its kind)
   budget set CATEGORY YYYY-MM AMOUNT|none
-  budget group GROUP fixed|variable YYYY-MM AMOUNT|none
-                                    one budget for a group's fixed or variable
-                                    categories together; their own budgets count
-                                    within it, the rest is shared
+                                    income and fixed costs, per category
+  budget group GROUP variable YYYY-MM AMOUNT|none
+                                    variable costs, one budget per group for its
+                                    variable categories together
   budget average YEAR LAST_MONTH MONTHS [--overwrite]
+                                    every month of YEAR from the average: per category,
+                                    variable costs per group
   import [ACCOUNT] FILE.xml...      CAMT.053; backs up first. Without ACCOUNT each
                                     statement goes to the account with its IBAN
   contract save FILE.json           add (no id) or replace a contract, as `contracts` shows
@@ -727,13 +730,15 @@ fn budget(s: &mut Store, a: &mut Args) -> R<Value> {
             Ok(json!({ "budgets_set": set }))
         }
         Some("group") => {
-            let [_, group, kind, month, amount] = a.take::<5>("budget group GROUP fixed|variable YYYY-MM AMOUNT|none")?;
+            let [_, group, kind, month, amount] = a.take::<5>("budget group GROUP variable YYYY-MM AMOUNT|none")?;
             check_month(&month)?;
             let group = group_name(&s.data, &group)?;
             let kind = match kind.to_lowercase().as_str() {
-                "fixed" | "vast" => CategoryKind::Fixed,
                 "variable" | "variabel" => CategoryKind::Variable,
-                k => return Err(format!("Not fixed or variable: {k}")),
+                "fixed" | "vast" => {
+                    return Err("Group budgets are for variable costs: budget fixed costs per category with `budget set`".into())
+                }
+                k => return Err(format!("Not variable: {k}")),
             };
             let cents = match amount.as_str() {
                 "none" | "-" | "" => None,
@@ -741,11 +746,7 @@ fn budget(s: &mut Store, a: &mut Args) -> R<Value> {
             };
             s.mutate(|ds| store::set_group_budget(ds, &group, kind, &month, cents))?;
             let stored = s.data.group_budget_for(&group, kind, &month);
-            let inside = s.data.budgets_inside_group(&group, kind, &month);
-            Ok(json!({
-                "group": group, "kind": kind, "month": month, "amount_cents": stored,
-                "inside_cents": inside, "capped": stored != cents,
-            }))
+            Ok(json!({ "group": group, "kind": kind, "month": month, "amount_cents": stored, "capped": stored != cents }))
         }
         _ => Err("Usage: fin-cli budget set|group|average ...".into()),
     }
@@ -872,24 +873,34 @@ mod tests {
         assert!(r[0]["rules"]["text"].as_array().unwrap().iter().any(|v| v == "testwinkel"));
         cli(&file, &["rule", "remove", "groceries", "text", "testwinkel"]).unwrap();
 
-        cli(&file, &["budget", "set", "groceries", "2026-01", "400"]).unwrap();
+        // Variable costs are budgeted per group, fixed costs per category.
+        let err = cli(&file, &["budget", "set", "groceries", "2026-01", "400"]).unwrap_err();
+        assert_eq!(err, "Variable categories are budgeted per group: set the budget on Huishouden");
+        cli(&file, &["budget", "group", "Huishouden", "variable", "2026-01", "400"]).unwrap();
+        cli(&file, &["budget", "set", "road_tax", "2026-01", "40"]).unwrap();
         let o = cli(&file, &["overview", "--month", "2026-01"]).unwrap();
-        assert_eq!(o["budget"]["variable"], 40000);
+        assert_eq!((o["budget"]["variable"].as_i64(), o["budget"]["fixed"].as_i64()), (Some(40000), Some(4000)));
 
         // A group budget, by name in either language or by key; the overview shows the group's line.
-        cli(&file, &["budget", "set", "fuel", "2026-01", "85"]).unwrap();
         let g = cli(&file, &["budget", "group", "Transport", "variable", "2026-01", "115"]).unwrap();
-        assert_eq!((g["group"].as_str(), g["amount_cents"].as_i64(), g["inside_cents"].as_i64()), (Some("Vervoer"), Some(11500), Some(8500)));
-        cli(&file, &["budget", "group", "transport", "vast", "2026-01", "40"]).unwrap();
-        assert!(cli(&file, &["budget", "group", "Vervoer", "variable", "2026-01", "50"]).is_err(), "below Brandstof's 85");
+        assert_eq!((g["group"].as_str(), g["amount_cents"].as_i64()), (Some("Vervoer"), Some(11500)));
+        assert!(cli(&file, &["budget", "group", "finances", "vast", "2026-01", "40"]).unwrap_err().starts_with("Group budgets are for variable costs"));
         assert!(cli(&file, &["budget", "group", "Nergens", "variable", "2026-01", "50"]).is_err());
         let o = cli(&file, &["overview", "--month", "2026-01"]).unwrap();
         assert_eq!(o["budget"]["variable"], 40000 + 11500);
         assert!(o["variable"].as_array().unwrap().iter().any(|l| l["group_line"] == true && l["name"] == "Vervoer"));
 
+        // Categories respect their group's kind.
+        let err = cli(&file, &["category", "add", "Parkeervergunning", "Vervoer", "fixed"]).unwrap_err();
+        assert_eq!(err, "Vervoer holds variable costs: a fixed cost needs a group of fixed costs");
+        cli(&file, &["category", "add", "Fietsen", "Vervoer", "variable"]).unwrap();
+        let err = cli(&file, &["category", "group", "Fietsen", "Financiën"]).unwrap_err();
+        assert_eq!(err, "Financiën holds fixed costs: a variable cost needs a group of variable costs");
+        assert_eq!(cli(&file, &["category", "group", "Fietsen", "Huishouden"]).unwrap()["group"], "Huishouden");
+
         // The app's store sees CLI writes and does not save over them.
         assert!(s.reload_if_changed().unwrap());
-        assert_eq!(s.data.budget_for("sys-groceries", "2026-01"), Some(40000));
+        assert_eq!(s.data.group_budget_for("Huishouden", CategoryKind::Variable, "2026-01"), Some(40000));
 
         assert!(cli(&file, &["categorize", "nope", "groceries"]).is_err());
         assert!(cli(&file, &["frobnicate"]).is_err());

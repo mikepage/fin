@@ -6,6 +6,24 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-01
+
+### Changed
+
+- Variable spending is budgeted per group only; fixed costs and income per
+  category only. A group holds either fixed or variable costs, never both, and a
+  new category follows its group's type.
+- Health, car and moped/bike insurance move to Insurance; road tax, car
+  purchase/lease, debt repayment, bank fees and alimony to a new Finances group.
+  Transport, Medical costs and Other expenses are variable only.
+- The Plan grid shows one row per variable group; an opened group on the
+  Overview lists its categories with what each spent.
+
+### Removed
+
+- The Left to spend tab: the Overview shows the month against the budget.
+- Budgets of a variable category's own, and the rest shared within a group.
+
 ## [2.0.0] - 2026-10-01
 
 The first release of this repository. Fin is personal finance for macOS: one local
@@ -54,4 +72,5 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.1.0]: https://github.com/mikepage/fin/releases/tag/v2.1.0
 [2.0.0]: https://github.com/mikepage/fin/releases/tag/v2.0.0

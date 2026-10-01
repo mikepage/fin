@@ -120,7 +120,6 @@ button:disabled { opacity: 0.55; cursor: default; }
 button.primary { background: var(--navy); border-color: var(--navy); color: var(--on-navy); font-weight: 600; }
 button.dark { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 600; }
 button.round { width: 40px; padding: 0; border-radius: 20px; font-size: 18px; }
-button.round.small { width: 28px; height: 28px; border-radius: 14px; font-size: 15px; vertical-align: middle; }
 button.icon { width: 36px; padding: 0; border: 0; background: transparent; color: var(--muted); }
 button.icon:hover { color: var(--neg); }
 button.link { height: auto; padding: 0; border: 0; background: none; color: var(--accent-strong); text-decoration: underline; }
@@ -832,9 +831,6 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
 /* Budget check: rows open to the largest transactions */
 .bc-item > summary { list-style: none; cursor: default; }
 .bc-item > summary::-webkit-details-marker { display: none; }
-.bc-row.check { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 140px 100px; }
-/* Where spending should be by now: a dashed line on the track. */
-.bc-now { position: absolute; top: 2px; bottom: 2px; width: 0; margin-left: -1px; border-left: 2px dashed var(--muted); opacity: .7; }
 /* The table under a bar chart: the same figures, readable. */
 .data-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .data-table th, .data-table td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--line-soft); white-space: nowrap; }
@@ -847,8 +843,6 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
 .table-card .data-table { margin: 0; }
 .table-card .data-table thead th { border-top: 0; }
 .bc-item[open] > summary { background: hsl(var(--hue, 215) var(--tone-sat) 50% / var(--tone-row)); }
-.bc-status { font-size: 13px; text-align: right; white-space: nowrap; }
-.bc-status.over strong { color: var(--neg); }
 
 /* Year forecast */
 .afford { padding: 8px 20px 14px; }
@@ -891,12 +885,10 @@ ul.af-verdict li { margin: 2px 0; }
 .bc-row.sub .bc-label { padding-left: 32px; font-size: 13px; color: var(--muted); }
 .bc-row.sub .bc-track { height: 12px; }
 .bc-row.sub .bc-value { font-size: 13px; }
-.bc-row.sub.rest .bc-label { font-style: italic; }
 /* The group budget rows on the Budget page. */
 .budget-row.group-budget .budget-name { padding-left: 6px; font-weight: 600; font-size: 13px; }
+.budget-row.group-budget .budget-name .muted { font-weight: 400; }
 .budget-row.group-budget .budget-cell { font-weight: 600; }
-.budget-row.group-budget .group-toggle { font-size: 13px; font-weight: 600; text-decoration: none; color: var(--text); white-space: nowrap; }
-.budget-row.group-budget .group-toggle:hover { color: var(--accent-strong); }
 /* Result: orange with a "shortfall" badge when short, a quiet "to save" badge otherwise */
 .af-cell.result.over { color: var(--neg); }
 .af-badge {
