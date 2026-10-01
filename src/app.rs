@@ -997,83 +997,54 @@ fn Affordability(year: RwSignal<i32>) -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     // [income, fixed, variable, investment]: budgeted for the year, actual per month so far.
     let figures = Memo::new(move |_| ctx.data.with(|d| plannable_year(d, year.get())));
-    // Whole euros: the cents only distract here.
-    let whole = |c: i64| format!("€ {}", budget_text((c as f64 / 100.0).round() as i64 * 100));
-    let (short_label, save_label) = (t!("shortfall"), t!("to save"));
-    // A cell; on the result row a shortfall is orange with a "shortfall" badge, what is
-    // left over gets "to save" (it can go to savings).
-    let cell = move |class: String, result: bool, value: Box<dyn Fn() -> i64 + Send + Sync>| {
-        let value = std::sync::Arc::new(value);
-        let (v1, v2, v3) = (value.clone(), value.clone(), value);
+    // Columns: 0 budgeted, 1 actual so far, 2 expected at budget, 3 expected at pace.
+    fn col(f: &Plannable, i: usize) -> [i64; 4] {
+        *[&f.budget, &f.actual, &f.expected, &f.at_pace][i]
+    }
+    // A plain table row; totals (result, net) bold. Extra income and investments have no
+    // budget, so the budget column shows none for them.
+    let row = move |label: &'static str, total: bool, pick: fn(&Plannable, usize) -> Option<i64>| {
         view! {
-            <span class=class class:over=move || result && v1() < 0>
-                {move || result.then(|| {
-                    let short = v2() < 0;
-                    view! { <small class="af-badge" class:short=short>{if short { short_label } else { save_label }}</small> }
-                })}
-                {move || whole(v3())}
-            </span>
-        }
-    };
-    let row = move |label: &'static str, class: &'static str, pick: fn(&[i64; 4]) -> i64| {
-        view! {
-            <span class=format!("af-label {class}")>{label}</span>
-            {cell(format!("af-cell {class}"), class == "result", Box::new(move || figures.with(|f| pick(&f.budget))))}
-            {cell(format!("af-cell {class}"), class == "result", Box::new(move || figures.with(|f| pick(&f.actual))))}
-            {cell(format!("af-cell forecast {class}"), class == "result", Box::new(move || figures.with(|f| pick(&f.expected))))}
-            {cell(format!("af-cell pace {class}"), class == "result", Box::new(move || figures.with(|f| pick(&f.at_pace))))}
-        }
-    };
-    // Below the result, what's outside the plan: extra income and investments as far as
-    // they happened (no budget, so the budget column has none), and the net they leave.
-    // Columns: 0 budgeted, 1 actual, 2 expected at budget, 3 expected at pace.
-    let outside = move |label: &'static str, class: &'static str, pick: fn(&Plannable, usize) -> Option<i64>| {
-        let col = move |i: usize, extra_class: &'static str| {
-            view! {
-                <span class=format!("af-cell {extra_class} {class}") class:over=move || class.contains("result") && figures.with(|f| pick(f, i)).is_some_and(|v| v < 0)>
-                    {move || figures.with(|f| pick(f, i)).map(whole).unwrap_or_else(|| "–".into())}
-                </span>
-            }
-        };
-        view! {
-            <span class=format!("af-label {class}")>{label}</span>
-            {col(0, "")}
-            {col(1, "")}
-            {col(2, "forecast")}
-            {col(3, "pace")}
+            <tr class:total=total>
+                <td>{label}</td>
+                {(0..4).map(|i| view! {
+                    <td>{move || figures.with(|f| pick(f, i)).map(|v| format!("€ {}", whole_euros(v))).unwrap_or_else(|| "–".into())}</td>
+                }).collect_view()}
+            </tr>
         }
     };
     // What keeping to the budget is worth against the current pace.
     let room = move || figures.with(|f| plan_result(&f.expected) - plan_result(&f.at_pace));
     view! {
-        <section class="panel afford">
+        <section class="panel table-card">
             <div class="section-head">
                 <h2>{t!("Year forecast")}" "{move || year.get()}</h2>
             </div>
-            <div class="af-grid">
-                <span></span>
-                <span class="af-head">{t!("Budgeted per year")}</span>
-                <span class="af-head">{move || figures.with(|f| match f.elapsed {
-                    12 => t!("Actual").to_string(),
-                    0 => t!("Actual (no full month yet)").to_string(),
-                    n => t!("Actual through {}", i18n::month_short(n - 1)),
-                })}</span>
-                <span class="af-head" title=t!("Actual so far, then as budgeted")>{t!("Expected (budget)")}</span>
-                <span class="af-head" title=t!("Actual so far, then variable spending at the average of the last six months")>{t!("Expected (pace)")}</span>
-                {row(t!("Fixed income"), "", |v| v[0])}
-                {row(t!("Fixed costs"), "", |v| -v[1])}
-                {row(t!("Discretionary"), "sub", |v| v[0] - v[1])}
-                {row(t!("Variable"), "", |v| -v[2])}
-                {row(t!("Result"), "result", plan_result)}
-                {outside(t!("Extra income"), "", |f, i| (i > 0).then_some(f.extra))}
-                {outside(t!("Investments"), "", |f, i| (i > 0).then_some(-f.invested))}
-                {outside(t!("Net"), "sub result", |f, i| {
-                    let col = [&f.budget, &f.actual, &f.expected, &f.at_pace][i];
-                    Some(plan_result(col) + if i > 0 { f.extra - f.invested } else { 0 })
-                })}
-            </div>
+            <table class="data-table">
+                <thead><tr>
+                    <th></th>
+                    <th>{t!("Budgeted per year")}</th>
+                    <th>{move || figures.with(|f| match f.elapsed {
+                        12 => t!("Actual").to_string(),
+                        0 => t!("Actual (no full month yet)").to_string(),
+                        n => t!("Actual through {}", i18n::month_short(n - 1)),
+                    })}</th>
+                    <th title=t!("Actual so far, then as budgeted")>{t!("Expected (budget)")}</th>
+                    <th title=t!("Actual so far, then variable spending at the average of the last six months")>{t!("Expected (pace)")}</th>
+                </tr></thead>
+                <tbody>
+                    {row(t!("Fixed income"), false, move |f, i| Some(col(f, i)[0]))}
+                    {row(t!("Fixed costs"), false, move |f, i| Some(-col(f, i)[1]))}
+                    {row(t!("Discretionary"), false, move |f, i| Some(col(f, i)[0] - col(f, i)[1]))}
+                    {row(t!("Variable"), false, move |f, i| Some(-col(f, i)[2]))}
+                    {row(t!("Result"), true, move |f, i| Some(plan_result(&col(f, i))))}
+                    {row(t!("Extra income"), false, |f, i| (i > 0).then_some(f.extra))}
+                    {row(t!("Investments"), false, |f, i| (i > 0).then_some(-f.invested))}
+                    {row(t!("Net"), true, move |f, i| Some(plan_result(&col(f, i)) + if i > 0 { f.extra - f.invested } else { 0 }))}
+                </tbody>
+            </table>
             {move || (room() > 0 && figures.with(|f| f.elapsed < 12)).then(|| view! {
-                <p class="af-room">{t!("Keeping to the budget is worth {} against the current pace.", euro((room() as f64 / 100.0).round() as i64 * 100).replace(",00", ""))}</p>
+                <p class="hint">{t!("Keeping to the budget is worth {} against the current pace.", format!("€ {}", whole_euros(room())))}</p>
             })}
         </section>
     }
@@ -2509,10 +2480,13 @@ fn ImportDialog(open: RwSignal<bool>) -> impl IntoView {
 /// (income, fixed, variable). Disabled categories, the transfer category (internal
 /// transfers) and the unsorted one are left out.
 fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
-    grouped(ds)
+    // Income first, then fixed costs, then variable spending; groups in list order
+    // within each.
+    let groups = grouped(ds);
+    [CategoryKind::Income, CategoryKind::Fixed, CategoryKind::Variable]
         .into_iter()
-        .flat_map(|(g, cats)| {
-            [CategoryKind::Income, CategoryKind::Fixed, CategoryKind::Variable].into_iter().map(move |k| {
+        .flat_map(|k| {
+            groups.iter().map(move |(g, cats)| {
                 let budgeted = |c: &&Category| c.budgetable() && c.kind == k && c.id != UNSORTED_CATEGORY_ID;
                 (g.clone(), cats.iter().filter(budgeted).cloned().collect::<Vec<_>>())
             })
@@ -2879,8 +2853,8 @@ fn BudgetPage() -> impl IntoView {
                         let names = cats.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ");
                         view! {
                             <div class=format!("budget-row group-budget {}", cat_tone(cats.first()))>
-                                <span class="budget-name" title=names.clone()>
-                                    {t!("Group budget")}" "<span class="muted">{tn!(n, "{} category", "{} categories", n)}</span>
+                                <span class="budget-name" title=format!("{}: {names}", tn!(n, "{} category", "{} categories", n))>
+                                    {t!("Group budget")}
                                 </span>
                                 {(0..12).map(|i| group_cell(group.clone(), names.clone(), i)).collect_view()}
                             </div>

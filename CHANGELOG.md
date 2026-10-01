@@ -6,6 +6,15 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-10-01
+
+### Changed
+
+- The year forecast is a plain table like the others: one font size, no colours
+  or badges, the result and the net in bold.
+- The Plan grid lists income first, then fixed costs, then variable spending.
+  A group budget's row no longer shows a category count (it is in the tooltip).
+
 ## [2.1.3] - 2026-10-01
 
 ### Fixed
@@ -99,6 +108,7 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.1.4]: https://github.com/mikepage/fin/releases/tag/v2.1.4
 [2.1.3]: https://github.com/mikepage/fin/releases/tag/v2.1.3
 [2.1.2]: https://github.com/mikepage/fin/releases/tag/v2.1.2
 [2.1.1]: https://github.com/mikepage/fin/releases/tag/v2.1.1

@@ -148,8 +148,6 @@ pub const UI: &[(&str, &str)] = &[
     ("not yet", "nog niet"),
     ("Total through this month", "Totaal t/m deze maand"),
     // Year forecast and budget check
-    ("shortfall", "tekort"),
-    ("to save", "sparen"),
     ("Year forecast", "Jaarprognose"),
     ("Budgeted per year", "Begroot per jaar"),
     ("Actual (no full month yet)", "Werkelijk (nog geen hele maand)"),
