@@ -115,7 +115,7 @@ pub const CATALOG: &[(&str, &str, CategoryKind)] = &[
     (PENSION, g::INCOME, I),
     (STUDY_ALLOWANCE, g::INCOME, I),
     (SIDE_INCOME, g::INCOME, I),
-    // Often spent on something one-off (a holiday, an investment): not budgeted.
+    // Once a year, often spent on something one-off: in the year budget, not the month's.
     (HOLIDAY_PAY, g::INCOME, CategoryKind::IrregularIncome),
     (BONUSES, g::INCOME, I),
     (TAX_REFUND, g::INCOME, I),
@@ -123,7 +123,7 @@ pub const CATALOG: &[(&str, &str, CategoryKind)] = &[
     (ALIMONY_RECEIVED, g::INCOME, I),
     (TAX_ALLOWANCES, g::INCOME, I),
     (EXPENSE_CLAIMS, g::INCOME, I),
-    // Income you can't plan: counted, but not budgeted.
+    // Income that doesn't come every month: in the year budget, not the month's.
     (INTEREST_RECEIVED, g::INCOME, CategoryKind::IrregularIncome),
     (INVESTMENT_INCOME, g::INCOME, CategoryKind::IrregularIncome),
     (OTHER_INCOME, g::INCOME, CategoryKind::IrregularIncome),

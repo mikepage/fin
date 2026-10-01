@@ -815,7 +815,7 @@ fn ReportsPage() -> impl IntoView {
             Report::Saldo => t!("Net"),
             Report::Expenses => t!("Expenses"),
             Report::Income => t!("Income"),
-            Report::Budget => t!("Result against budget"),
+            Report::Budget => t!("Result against the month budget"),
         };
         match (r, sel) {
             (Report::Saldo | Report::Budget, _) => name.to_string(),
@@ -961,17 +961,19 @@ fn forecast_from(year: i32) -> String {
     }
 }
 
-/// One month's result against its budget: fixed income minus fixed and variable costs,
-/// without extra income and investments, minus the budgeted result. None for a month
-/// that isn't complete yet.
+/// One month's result against its month budget: fixed income minus fixed and variable
+/// costs, without extra income and investments (the year budget's), minus the
+/// budgeted result. None for a month that isn't complete yet.
 fn result_against_budget(d: &Dataset, month: &str, complete: bool) -> Option<i64> {
     if !complete {
         return None;
     }
     let o = d.budget_overview(month);
-    let fixed_income: i64 = o.income.iter().filter(|l| l.kind == CategoryKind::Income && l.category_id.is_some()).map(|l| l.actual_cents).sum();
+    let fixed = o.income.iter().filter(|l| l.kind == CategoryKind::Income && l.category_id.is_some());
+    let (fixed_income, fixed_income_budget) =
+        fixed.fold((0, 0), |(a, b), l| (a + l.actual_cents, b + l.budget_cents.unwrap_or(0)));
     let (a, b) = (o.actual, o.budget);
-    Some((fixed_income - a.fixed - a.variable) - (b.income - b.fixed - b.variable))
+    Some((fixed_income - a.fixed - a.variable) - (fixed_income_budget - b.fixed - b.variable))
 }
 
 
@@ -2281,15 +2283,37 @@ fn ImportDialog(open: RwSignal<bool>) -> impl IntoView {
     }
 }
 
-/// The budget grid's blocks: categories that can get a budget, per group split by kind
-/// (income, fixed, variable). Disabled categories, the transfer category (internal
-/// transfers) and the unsorted one are left out.
-fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
-    // Income first, then fixed costs, then variable spending; groups in list order
-    // within each.
+/// Which budget the Budget page shows: the month budget (fixed income, fixed and
+/// variable costs, what comes back every month) or the year budget (that plus extra
+/// income and investments).
+#[derive(Clone, Copy, PartialEq)]
+enum BudgetScope {
+    Month,
+    Year,
+}
+
+impl BudgetScope {
+    /// The kinds in this budget, in the grid's order.
+    fn kinds(self) -> &'static [CategoryKind] {
+        use CategoryKind::*;
+        match self {
+            BudgetScope::Month => &[Income, Fixed, Variable],
+            BudgetScope::Year => &[Income, IrregularIncome, Fixed, Variable, Investment],
+        }
+    }
+}
+
+/// The budget grid's blocks: categories that can get a budget in `scope`, per group
+/// split by kind (income, extra income, fixed, variable, investments). Disabled
+/// categories, the transfer category (internal transfers) and the unsorted one are
+/// left out.
+fn budget_groups(ds: &Dataset, scope: BudgetScope) -> Vec<(String, Vec<Category>)> {
+    // Per kind in the scope's order; groups in list order within each.
     let groups = grouped(ds);
-    [CategoryKind::Income, CategoryKind::Fixed, CategoryKind::Variable]
-        .into_iter()
+    scope
+        .kinds()
+        .iter()
+        .copied()
         .flat_map(|k| {
             groups.iter().map(move |(g, cats)| {
                 let budgeted = |c: &&Category| c.budgetable() && c.kind == k && c.id != UNSORTED_CATEGORY_ID;
@@ -2300,13 +2324,17 @@ fn budget_groups(ds: &Dataset) -> Vec<(String, Vec<Category>)> {
         .collect()
 }
 
-/// The budget: the grid where budgets are set up, per month for a year. How the month
+/// The budget: the grid where budgets are set up, per month for a year. The month
+/// budget holds what comes back every month; the year budget adds extra income and
+/// investments, in the month they come, with the year's total per row. How the month
 /// and the year are going is on the Overview.
 #[component]
 fn BudgetPage() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let year = RwSignal::new(ctx.month.get_untracked()[..4].parse::<i32>().unwrap_or(2026));
     let notice = RwSignal::new(None::<String>);
+    let scope = RwSignal::new(BudgetScope::Month);
+    let is_year = move || scope.get() == BudgetScope::Year;
 
     // "From average": the last full months before this one.
     let avg_open = RwSignal::new(false);
@@ -2379,18 +2407,19 @@ fn BudgetPage() -> impl IntoView {
     let month_at = |y: i32, i: usize| format!("{y:04}-{:02}", i + 1);
     let is_current = move |i: usize| year.get() == this_year && i == this_idx;
 
-    let groups = Memo::new(move |_| ctx.data.with(budget_groups));
-    // Budgeted per kind per month (switched-on categories): income, fixed, variable,
-    // investments. The summary rows and the result come from these. Income and fixed
-    // costs per category, variable costs per group.
+    let groups = Memo::new(move |_| ctx.data.with(|d| budget_groups(d, scope.get())));
+    // Budgeted per kind per month (switched-on categories): income, extra income,
+    // fixed, variable, investments. The summary rows and the result come from these.
+    // Income, fixed costs and the year budget's kinds per category, variable costs per
+    // group.
     let totals = Memo::new(move |_| {
         let prefix = format!("{:04}-", year.get());
         ctx.data.with(|d| {
-            let mut t = [[0i64; 12]; 4];
+            let mut t = [[0i64; 12]; 5];
             let month_index = |month: &str| month[5..].parse::<usize>().ok().filter(|m| (1..=12).contains(m)).map(|m| m - 1);
             for g in d.group_budgets.iter().filter(|g| g.month.starts_with(&prefix) && d.group_budget_counts(g)) {
                 if let Some(i) = month_index(&g.month) {
-                    t[2][i] += g.amount_cents;
+                    t[3][i] += g.amount_cents;
                 }
             }
             for b in d.budgets.iter().filter(|b| b.month.starts_with(&prefix)) {
@@ -2401,18 +2430,21 @@ fn BudgetPage() -> impl IntoView {
                 let row = match c.kind {
                     _ if !c.budgetable() => continue,
                     CategoryKind::Income => 0,
-                    CategoryKind::Fixed => 1,
-                    CategoryKind::Investment => 3,
-                    CategoryKind::Variable | CategoryKind::IrregularIncome | CategoryKind::Transfer => continue,
+                    CategoryKind::IrregularIncome => 1,
+                    CategoryKind::Fixed => 2,
+                    CategoryKind::Investment => 4,
+                    CategoryKind::Variable | CategoryKind::Transfer => continue,
                 };
-                if let Ok(m @ 1..=12) = b.month[5..].parse::<usize>() {
-                    t[row][m - 1] += b.amount_cents;
+                if let Some(i) = month_index(&b.month) {
+                    t[row][i] += b.amount_cents;
                 }
             }
             t
         })
     });
-    let summary_row = move |label: &'static str, value: fn(&[[i64; 12]; 4], usize) -> i64, class: &'static str| {
+    // A summary row; the year budget adds the year's total at the end.
+    let summary_row = move |label: &'static str, value: fn(&[[i64; 12]; 5], usize) -> i64, class: &'static str| {
+        let year_total = move || totals.with(|t| (0..12).map(|i| value(t, i)).sum::<i64>());
         view! {
             <div class=format!("budget-row total {class}")>
                 <span>{label}</span>
@@ -2421,10 +2453,38 @@ fn BudgetPage() -> impl IntoView {
                         {move || euro(totals.with(|t| value(t, i)))}
                     </span>
                 }).collect_view()}
+                <Show when=is_year>
+                    <span class="right year-total" class:over=move || class == "result" && year_total() < 0>{move || euro(year_total())}</span>
+                </Show>
             </div>
         }
     };
-    let has_investments = move || totals.with(|t| t[3].iter().any(|v| *v != 0));
+    // A row's year total in the year budget: a category's budgets (`group` false) or a
+    // group's variable budget (`group` true) added up.
+    let row_total = move |key: String, group: bool| {
+        let key = StoredValue::new(key);
+        let sum = move || {
+            let key = key.get_value();
+            let y = year.get();
+            ctx.data.with(|d| {
+                (0..12)
+                    .filter_map(|i| {
+                        let month = month_at(y, i);
+                        if group {
+                            d.group_budget_for(&key, CategoryKind::Variable, &month)
+                        } else {
+                            d.budget_for(&key, &month)
+                        }
+                    })
+                    .sum::<i64>()
+            })
+        };
+        view! {
+            <Show when=is_year>
+                <span class="right year-total">{move || match sum() { 0 => "–".to_string(), s => euro_text(s) }}</span>
+            </Show>
+        }
+    };
 
     let shift_year = move |delta: i32| {
         notice.set(None);
@@ -2585,12 +2645,20 @@ fn BudgetPage() -> impl IntoView {
                 </div>
             </div>
         </Show>
+        <div class="filters">
+            <div class="segmented" role="group" aria-label=t!("Budget")>
+                <button class:on=move || !is_year() aria-pressed=move || (!is_year()).to_string() on:click=move |_| scope.set(BudgetScope::Month)>{t!("Month budget")}</button>
+                <button class:on=is_year aria-pressed=move || is_year().to_string() on:click=move |_| scope.set(BudgetScope::Year)>{t!("Year budget")}</button>
+            </div>
+        </div>
         <p class="hint">
-            {move || notice.get().unwrap_or_else(|| {
+            {move || notice.get().unwrap_or_else(|| if is_year() {
+                t!("The month budgets of January to December, with extra income and investments in the month they come. Copying a month to the next leaves those where they are.").into()
+            } else {
                 t!("Amounts per month. Click a month heading to copy that month to the next; empty cells have no budget.").into()
             })}
         </p>
-        <section class="panel budget">
+        <section class="panel budget" class:with-total=is_year>
             <div class="budget-row head">
                 <span>{t!("Category")}</span>
                 {(0..12).map(|i| view! {
@@ -2603,13 +2671,22 @@ fn BudgetPage() -> impl IntoView {
                         {i18n::month_short(i)}
                     </button>
                 }).collect_view()}
+                <Show when=is_year><span class="year-head">{t!("Year")}</span></Show>
             </div>
+            // The month budget's result is fixed income against fixed and variable
+            // costs; the year budget's counts extra income and investments too.
             <div class="budget-summary">
                 {summary_row(t!("Fixed income"), |t, i| t[0][i], "income")}
-                {summary_row(t!("Fixed costs"), |t, i| -t[1][i], "")}
-                {summary_row(t!("Variable"), |t, i| -t[2][i], "")}
-                <Show when=has_investments>{summary_row(t!("Investments"), |t, i| -t[3][i], "")}</Show>
-                {summary_row(t!("Result"), |t, i| t[0][i] - t[1][i] - t[2][i] - t[3][i], "result")}
+                <Show when=is_year>{summary_row(t!("Extra income"), |t, i| t[1][i], "income")}</Show>
+                {summary_row(t!("Fixed costs"), |t, i| -t[2][i], "")}
+                {summary_row(t!("Variable"), |t, i| -t[3][i], "")}
+                <Show when=is_year>{summary_row(t!("Investments"), |t, i| -t[4][i], "")}</Show>
+                <Show
+                    when=is_year
+                    fallback=move || summary_row(t!("Result"), |t, i| t[0][i] - t[2][i] - t[3][i], "result")
+                >
+                    {summary_row(t!("Result"), |t, i| t[0][i] + t[1][i] - t[2][i] - t[3][i] - t[4][i], "result")}
+                </Show>
             </div>
             <For
                 each=move || groups.get()
@@ -2628,6 +2705,7 @@ fn BudgetPage() -> impl IntoView {
                                     {t!("Group budget")}
                                 </span>
                                 {(0..12).map(|i| group_cell(group.clone(), names.clone(), i)).collect_view()}
+                                {row_total(group.clone(), true)}
                             </div>
                         }
                         .into_any()
@@ -2637,6 +2715,7 @@ fn BudgetPage() -> impl IntoView {
                                 <div class=format!("budget-row tinted {}", cat_tone(Some(c)))>
                                     <span class="budget-name" title=c.name.clone()>{cat_badge(Some(c))}<span>{c.name.clone()}</span></span>
                                     {(0..12).map(|i| cell(c, i)).collect_view()}
+                                    {row_total(c.id.clone(), false)}
                                 </div>
                             })
                             .collect_view()

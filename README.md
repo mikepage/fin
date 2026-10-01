@@ -4,7 +4,8 @@ Personal finance for macOS. Tauri v2 with a Rust Leptos frontend. Local only: al
 
 - CAMT.053 import (camt.053.001.02 through .08), multiple files at once, with progress; re-importing skips duplicates
 - Categories with rules (IBAN, whole-word text, money in or out), splits
-- Monthly overview against the budget; budgets per category and per group, with a year check against fixed income
+- Monthly overview against the budget; budgets per category and per group, with a year check against the budgeted income
+- A month budget (fixed income, fixed and variable costs) and a year budget (that plus extra income such as holiday pay, and investments)
 - Year result, left to spend and the year forecast; reports of expenses and income per month
 - Energy contracts with usage, net metering and year-end bills
 - Dutch (default) or English, set in Settings and stored in the data file

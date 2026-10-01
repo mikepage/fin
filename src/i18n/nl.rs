@@ -302,8 +302,14 @@ pub const UI: &[(&str, &str)] = &[
     ("Copy {} to {}", "{} naar {} kopiëren"),
     ("Fixed income", "Vaste inkomsten"),
     ("Group budget", "Groepsbudget"),
+    ("Month budget", "Maandbegroting"),
+    ("Year budget", "Jaarbegroting"),
+    (
+        "The month budgets of January to December, with extra income and investments in the month they come. Copying a month to the next leaves those where they are.",
+        "De maandbegrotingen van januari tot en met december, met extra inkomsten en investeringen in de maand dat ze komen. Een maand naar de volgende kopiëren laat die staan.",
+    ),
     // Reports: budget, CSV
-    ("Result against budget", "Resultaat t.o.v. budget"),
+    ("Result against the month budget", "Resultaat t.o.v. maandbegroting"),
     ("Per complete month: up is better than budgeted, down worse", "Per hele maand: omhoog is beter dan begroot, omlaag slechter"),
     ("Export CSV", "Exporteer CSV"),
     ("Save this report's months as a CSV file in Downloads", "Bewaar de maanden van dit rapport als CSV-bestand in Downloads"),

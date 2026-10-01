@@ -572,8 +572,9 @@ fn next_month(month: &str) -> Result<String, String> {
     Ok(format!("{y:04}-{m:02}"))
 }
 
-/// The budgeted result of a year: the income budgets minus the fixed and investment
-/// budgets of the switched-on categories and the variable group budgets. A variable
+/// The budgeted result of a year (the year budget): the income and extra income budgets
+/// minus the fixed and investment budgets of the switched-on categories and the
+/// variable group budgets. A variable
 /// category's own budget left in a file doesn't count.
 pub fn budget_year_result(ds: &Dataset, year: &str) -> i64 {
     let categories: i64 = ds
@@ -586,7 +587,7 @@ pub fn budget_year_result(ds: &Dataset, year: &str) -> i64 {
                 .map(|c| (c.kind, b.amount_cents))
         })
         .map(|(kind, a)| match kind {
-            CategoryKind::Income => a,
+            k if k.is_income() => a,
             k if k.is_expense() => -a,
             _ => 0,
         })
@@ -633,8 +634,9 @@ fn cap_to_year(ds: &Dataset, month: &str, sign: i64, old: i64, new: i64) -> Resu
     Ok(capped)
 }
 
-/// Sets or replaces an income or fixed category's budget. `None` or 0 removes it. The
-/// year result has to fit. Variable categories are budgeted per group
+/// Sets or replaces the budget of an income, extra income, fixed or investment
+/// category. `None` or 0 removes it. The year result has to fit. Variable categories
+/// are budgeted per group
 /// (set_group_budget); removing a budget of theirs left in a file is still allowed.
 pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents: Option<i64>) -> Result<(), String> {
     if !valid_month(month) {
@@ -652,7 +654,7 @@ pub fn set_budget(ds: &mut Dataset, category_id: &str, month: &str, amount_cents
     let amount = match cat.kind {
         _ if cat.disabled => amount,
         CategoryKind::Variable => None,
-        CategoryKind::Income => Some(cap_to_year(ds, month, 1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
+        k if k.is_income() => Some(cap_to_year(ds, month, 1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
         k if k.is_expense() => Some(cap_to_year(ds, month, -1, old, amount.unwrap_or(0))?).filter(|a| *a != 0),
         _ => amount,
     };
@@ -807,8 +809,10 @@ pub fn budgets_from_average(
     Ok(set)
 }
 
-/// Copies all budgets of `month` into the following month, overwriting the values
-/// there for those categories and groups. Budgets of others in the next month stay.
+/// Copies the month budget of `month` into the following month, overwriting the values
+/// there for those categories and groups. Budgets of others in the next month stay, and
+/// so do extra income and investments: they are in the year budget, planned in the
+/// month they come (holiday pay in May).
 pub fn copy_budget_month_to_next(ds: &mut Dataset, month: &str) -> Result<(), String> {
     if !valid_month(month) {
         return Err("Invalid month".into());
@@ -827,7 +831,7 @@ pub fn copy_budget_month_to_next(ds: &mut Dataset, month: &str) -> Result<(), St
         .iter()
         .filter(|b| b.month == month)
         .filter_map(|b| {
-            let c = ds.category(Some(&b.category_id)).filter(|c| c.kind != CategoryKind::Variable)?;
+            let c = ds.category(Some(&b.category_id)).filter(|c| c.kind != CategoryKind::Variable && c.kind.in_month_budget())?;
             Some((b.category_id.clone(), b.amount_cents, c.kind == CategoryKind::Income))
         })
         .collect();
@@ -1493,6 +1497,25 @@ mod tests {
         assert_eq!(budget_year_result(&ds, "2026"), 10_000);
         // Other years are separate; one without budgeted income isn't capped.
         set_budget(&mut ds, ids::RENT_MORTGAGE, "2027-01", Some(100)).unwrap();
+    }
+
+    /// Extra income and investments are in the year budget: they count in the year
+    /// result, and copying a month to the next leaves them where they are.
+    #[test]
+    fn year_budget() {
+        let mut ds = default_dataset();
+        set_budget(&mut ds, ids::SALARY, "2026-05", Some(100_000)).unwrap();
+        set_budget(&mut ds, ids::HOLIDAY_PAY, "2026-05", Some(50_000)).unwrap();
+        assert_eq!(budget_year_result(&ds, "2026"), 150_000);
+        // The holiday pay makes room for an investment.
+        set_budget(&mut ds, ids::HOME_IMPROVEMENT, "2026-08", Some(140_000)).unwrap();
+        assert_eq!(budget_year_result(&ds, "2026"), 10_000);
+        assert_eq!(ds.budget_overview("2026-05").budget.income, 150_000);
+        assert_eq!(ds.budget_overview("2026-08").budget.investment, 140_000);
+        // May to June: the salary goes along, the holiday pay doesn't.
+        copy_budget_month_to_next(&mut ds, "2026-05").unwrap();
+        assert_eq!(ds.budget_for(ids::SALARY, "2026-06"), Some(100_000));
+        assert_eq!(ds.budget_for(ids::HOLIDAY_PAY, "2026-06"), None);
     }
 
     #[test]

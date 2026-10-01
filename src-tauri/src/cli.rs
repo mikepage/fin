@@ -64,7 +64,8 @@ Changing
                                     or variable costs, never both
   category group CATEGORY GROUP     move a custom category to another group (of its kind)
   budget set CATEGORY YYYY-MM AMOUNT|none
-                                    income and fixed costs, per category
+                                    income and fixed costs, per category (month
+                                    budget); extra income and investments (year budget)
   budget group GROUP variable YYYY-MM AMOUNT|none
                                     variable costs, one budget per group for its
                                     variable categories together

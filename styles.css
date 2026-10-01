@@ -356,6 +356,10 @@ label.check input { height: auto; }
   padding: 3px 0;
   min-width: 880px;
 }
+/* The year budget: the year's total per row at the end. */
+.budget.with-total .budget-row { grid-template-columns: 170px repeat(12, minmax(54px, 1fr)) minmax(84px, 1.2fr); min-width: 980px; }
+.budget-row .year-total { padding-right: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.budget-row .year-head { padding-right: 6px; text-align: right; font-weight: 600; }
 .budget-row.head { padding: 10px 0; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
 .budget-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .month-head {

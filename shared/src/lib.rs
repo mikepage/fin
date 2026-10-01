@@ -49,15 +49,16 @@ impl BalanceCheck {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CategoryKind {
     Income,
-    /// Extra income: money in you can't plan (windfalls, refunds, interest). Counts as
-    /// income and in the net result, but not in budgeting.
+    /// Extra income: money in that doesn't come every month (holiday pay, refunds,
+    /// interest). Counts as income and in the net result; budgeted in the year budget only.
     IrregularIncome,
     /// Fixed costs
     Fixed,
     #[default]
     Variable,
     /// Investments: one-off spending such as a renovation or insulation. Counts as
-    /// spending and in the net result, but apart from the regular fixed and variable costs.
+    /// spending and in the net result, but apart from the regular fixed and variable
+    /// costs; budgeted in the year budget only.
     Investment,
     /// Only the system category "Internal transfers": money moved between own accounts.
     /// Holds transactions but counts nowhere - not as income or expense, not in budgets,
@@ -116,8 +117,15 @@ impl CategoryKind {
         matches!(self, CategoryKind::Income | CategoryKind::IrregularIncome)
     }
 
-    /// Whether categories of this kind are budgeted: not investments or extra income.
+    /// Whether categories of this kind are budgeted: every kind that counts. The year
+    /// budget holds them all, the month budget only the `in_month_budget` ones.
     pub fn budgetable(self) -> bool {
+        self.counts()
+    }
+
+    /// In the month budget, what comes back every month: fixed income, fixed and
+    /// variable costs. Extra income and investments are in the year budget only.
+    pub fn in_month_budget(self) -> bool {
         matches!(self, CategoryKind::Income | CategoryKind::Fixed | CategoryKind::Variable)
     }
 
@@ -185,7 +193,7 @@ impl RuleKind {
 
 impl Category {
     /// Whether this category takes part in budgeting: switched on and of a budgeted kind
-    /// (not an investment or extra income).
+    /// (not the transfer category).
     pub fn budgetable(&self) -> bool {
         !self.disabled && self.kind.budgetable()
     }
@@ -924,7 +932,8 @@ impl Dataset {
         !c.disabled && self.group_budget_for(&c.group, c.kind, month).is_some()
     }
 
-    /// A category's own budget in `month`: income, fixed costs (and investments) only.
+    /// A category's own budget in `month`: income, extra income, fixed costs and
+    /// investments.
     /// Variable categories are budgeted per group, so a budget of theirs left in a file
     /// doesn't count, nor does one of a switched-off category.
     pub fn own_budget(&self, c: &Category, month: &str) -> Option<i64> {
@@ -968,18 +977,18 @@ impl Dataset {
     /// instalments; for a variable one, through its group) gets nothing in the others;
     /// only one without any budget that year continues at its average over the
     /// complete months. An unfinished month isn't real yet. Investments and extra
-    /// income only count as far as they happened.
+    /// income are in the year budget: they count as budgeted, never at an average.
     pub fn forecast(&self, year: i32, current: &str) -> Vec<MonthForecast> {
         let months: Vec<String> = (1..=12).map(|m| format!("{year:04}-{m:02}")).collect();
         let actual_months: Vec<&String> = months.iter().filter(|m| m.as_str() < current).collect();
         let n = actual_months.len().max(1) as i64;
-        // Average actual per month so far, per budgetable category (and uncategorised spending).
+        // Average actual per month so far, per month-budget category (and uncategorised spending).
         let mut avg: Vec<(Option<String>, CategoryKind, i64)> = Vec::new();
         for m in &actual_months {
             let o = self.budget_overview(m);
             for l in o.income.iter().chain(&o.fixed).chain(&o.variable) {
                 let budgetable = match &l.category_id {
-                    Some(id) => self.category(Some(id)).is_some_and(|c| c.budgetable()),
+                    Some(id) => self.category(Some(id)).is_some_and(|c| c.budgetable() && c.kind.in_month_budget()),
                     None => l.kind == CategoryKind::Variable,
                 };
                 if !budgetable {
@@ -1009,10 +1018,11 @@ impl Dataset {
                 }
                 let mut t = KindTotals::default();
                 let mut add = |kind: CategoryKind, v: i64| match kind {
-                    CategoryKind::Income => t.income += v,
+                    CategoryKind::Income | CategoryKind::IrregularIncome => t.income += v,
                     CategoryKind::Fixed => t.fixed += v,
                     CategoryKind::Variable => t.variable += v,
-                    _ => {}
+                    CategoryKind::Investment => t.investment += v,
+                    CategoryKind::Transfer => {}
                 };
                 for g in self.group_budgets_in(m) {
                     add(g.kind, g.amount_cents);
@@ -1310,10 +1320,11 @@ impl Dataset {
             .collect()
     }
 
-    /// Average actual per month for every budgetable category (switched on, not the
-    /// transfer category) over `months`: spent for expenses, received for income, refunds
-    /// netted. Months without transactions count as zero. Rounded up to whole euros;
-    /// categories averaging nothing are left out. Returns (category id, cents).
+    /// Average actual per month for every category in the month budget (switched on; not
+    /// extra income, investments or transfers) over `months`: spent for expenses,
+    /// received for income, refunds netted. Months without transactions count as zero.
+    /// Rounded up to whole euros; categories averaging nothing are left out. Returns
+    /// (category id, cents).
     pub fn average_per_month(&self, months: &[String]) -> Vec<(String, i64)> {
         if months.is_empty() {
             return Vec::new();
@@ -1321,7 +1332,7 @@ impl Dataset {
         let parts = self.parts();
         self.categories
             .iter()
-            .filter(|c| c.kind.counts() && !c.disabled)
+            .filter(|c| c.kind.in_month_budget() && !c.disabled)
             .filter_map(|c| {
                 let net: i64 = parts
                     .iter()
@@ -1726,6 +1737,39 @@ mod tests {
         assert_eq!(get("transfer"), None, "transfers get no budget");
         assert_eq!(get("unused"), None, "nothing spent, nothing proposed");
         assert!(ds.average_per_month(&[]).is_empty());
+    }
+
+    /// Extra income and investments are in the year budget: the forecast plans them as
+    /// budgeted, and they never get an average (that fills the month budget).
+    #[test]
+    fn year_budget_kinds() {
+        assert!(CategoryKind::Income.in_month_budget() && !CategoryKind::IrregularIncome.in_month_budget());
+        assert!(CategoryKind::Investment.budgetable() && !CategoryKind::Investment.in_month_budget());
+        assert!(!CategoryKind::Transfer.budgetable());
+
+        let mut ds = budget_fixture();
+        let cat = |id: &str, kind| Category { id: id.into(), name: id.into(), group: "G".into(), kind, ..Default::default() };
+        ds.categories.push(cat("holiday_pay", CategoryKind::IrregularIncome));
+        ds.categories.push(cat("insulation", CategoryKind::Investment));
+        let tx = |id: &str, cents, c: &str| Transaction {
+            id: id.into(),
+            date: "2026-09-12".into(),
+            amount_cents: cents,
+            category_id: Some(c.into()),
+            account_id: "a".into(),
+            ..Default::default()
+        };
+        ds.transactions.push(tx("hp", 250000, "holiday_pay"));
+        ds.transactions.push(tx("ins", -400000, "insulation"));
+        let avg = ds.average_per_month(&months_ending("2026-09", 3));
+        assert!(avg.iter().all(|(id, _)| id != "holiday_pay" && id != "insulation"));
+
+        ds.budgets.push(Budget { category_id: "holiday_pay".into(), month: "2026-11".into(), amount_cents: 260000 });
+        ds.budgets.push(Budget { category_id: "insulation".into(), month: "2026-12".into(), amount_cents: 500000 });
+        let f = ds.forecast(2026, "2026-10");
+        assert_eq!((f[9].totals.income, f[9].totals.investment), (0, 0), "no budget in October, no average");
+        assert_eq!(f[10].totals.income, 260000);
+        assert_eq!(f[11].totals.investment, 500000);
     }
 
     #[test]

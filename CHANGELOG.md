@@ -6,6 +6,27 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-02
+
+### Added
+
+- **Month budget** and **Year budget** on the Budget page. The month budget is
+  what comes back every month: fixed income against fixed and variable costs. The
+  year budget is the month budgets of January to December plus extra income (holiday
+  pay, other income) and investments, in the month they come, with the year's total
+  per row.
+
+### Changed
+
+- Extra income and investments can be budgeted. The forecast plans them as budgeted
+  instead of only counting what happened; "From average…" still fills the month
+  budget only.
+- Budgeted extra income counts in the year check, so holiday pay makes room for an
+  investment.
+- Copying a month to the next copies the month budget only: holiday pay stays in May.
+- The Budget report on Reports is against the month budget, also when extra income
+  is budgeted.
+
 ## [2.2.0] - 2026-10-01
 
 ### Added
@@ -128,6 +149,7 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.3.0]: https://github.com/mikepage/fin/releases/tag/v2.3.0
 [2.2.0]: https://github.com/mikepage/fin/releases/tag/v2.2.0
 [2.1.4]: https://github.com/mikepage/fin/releases/tag/v2.1.4
 [2.1.3]: https://github.com/mikepage/fin/releases/tag/v2.1.3

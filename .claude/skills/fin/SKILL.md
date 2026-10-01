@@ -35,7 +35,7 @@ fin-cli backups
 fin-cli categorize TX_ID CATEGORY
 fin-cli rule add CATEGORY iban|text|in|out VALUE [--apply-from 2026-01-01]
 fin-cli rule remove CATEGORY KIND VALUE
-fin-cli budget set CATEGORY 2026-10 350      # income and fixed costs; "none" to clear
+fin-cli budget set CATEGORY 2026-10 350      # income, fixed costs, extra income, investments; "none" to clear
 fin-cli budget group Transport variable 2026-10 115   # variable costs; "none" to clear
 fin-cli category add NAME GROUP KIND         # KIND must match the group's fixed/variable
 fin-cli category group CATEGORY GROUP
@@ -71,6 +71,12 @@ Category names in the output follow the app's language; messages are English.
   refused). Lower budgets before raising others. `budget average` sets each
   income/fixed category and each variable group (the sum of its categories'
   averages); `--overwrite` touches all of them.
+- The month budget (maandbegroting) is fixed income against fixed and variable
+  costs: what comes back every month, and the fixed income should cover it. The year
+  budget (jaarbegroting) is January to December of that plus extra income (holiday
+  pay, other income) and investments, budgeted with `budget set` in the month they
+  come. Extra income counts in the year check; `budget average` and copying a month
+  to the next leave extra income and investments alone.
 - Ask before changes that are hard to undo: `restore`, `undo-import`, rules with
   `--apply-from`, or budget `--overwrite`. Writes are backed up daily, and imports
   and restores back up first.
