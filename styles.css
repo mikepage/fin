@@ -885,7 +885,10 @@ ul.af-verdict li { margin: 2px 0; }
 .bc-row.sub { min-height: 30px; padding-top: 3px; padding-bottom: 3px; }
 .bc-item.group[open] { padding-bottom: 6px; }
 .bc-row.sub .bc-label { padding-left: 32px; font-size: 13px; color: var(--muted); }
-.bc-row.sub .bc-track { height: 12px; }
+/* A thinner bar, with the compared month's line below it as on the main rows. */
+.bc-row.sub .bc-track { height: 16px; }
+.bc-row.sub .bc-bar { top: 1px; height: 8px; }
+.bc-row.sub .bc-before { bottom: 1px; height: 3px; }
 .bc-row.sub .bc-value { font-size: 13px; }
 /* The group budget rows on the Budget page. */
 .budget-row.group-budget .budget-name { padding-left: 6px; font-weight: 600; font-size: 13px; }

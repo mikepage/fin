@@ -6,6 +6,13 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-10-01
+
+### Fixed
+
+- In an opened group, the compared month's line sits below each category's bar
+  instead of over it.
+
 ## [2.1.2] - 2026-10-01
 
 ### Changed
@@ -92,6 +99,7 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.1.3]: https://github.com/mikepage/fin/releases/tag/v2.1.3
 [2.1.2]: https://github.com/mikepage/fin/releases/tag/v2.1.2
 [2.1.1]: https://github.com/mikepage/fin/releases/tag/v2.1.1
 [2.1.0]: https://github.com/mikepage/fin/releases/tag/v2.1.0
