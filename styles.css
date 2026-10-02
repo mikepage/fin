@@ -218,6 +218,9 @@ label.stack { font-size: 13px; }
 .inline-form label { flex: 1; }
 
 .list { padding: 4px 20px; }
+/* The transactions: tinted rows straight on the page, they are cards themselves. */
+.tx-list { margin-top: -5px; }
+.tx-list .rule-form { background: var(--panel); }
 .tx-row {
   display: grid;
   grid-template-columns: 95px 30px minmax(160px, 2fr) minmax(90px, 1fr) minmax(170px, 1fr) 100px 36px;
@@ -829,8 +832,11 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
   background: transparent; color: var(--muted); font-variant-numeric: tabular-nums; text-align: left;
 }
 .date-cell:hover { color: var(--accent-strong); background: hsl(var(--hue, 215) var(--tone-sat) 50% / 0.12); }
-.date-cell.moved span { color: var(--accent-strong); font-weight: 600; }
-.date-cell small { font-size: 10px; color: var(--muted); }
+/* A moved date reads like any other; a badge under it holds the bank date. */
+.date-cell small {
+  margin-top: 1px; padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 15px; white-space: nowrap;
+  color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .tx-row { position: relative; }
 .date-edit {
   position: absolute; z-index: 15; left: 8px; top: 50%; transform: translateY(-50%);

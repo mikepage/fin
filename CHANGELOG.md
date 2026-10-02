@@ -6,6 +6,14 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-10-02
+
+### Changed
+
+- The transactions are tinted rows straight on the page, without a card around them.
+- A transaction counted on another day shows that date like any other, with the bank
+  date in a badge under it instead of the date in bold.
+
 ## [2.4.0] - 2026-10-02
 
 ### Added

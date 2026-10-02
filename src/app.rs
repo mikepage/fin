@@ -1343,7 +1343,7 @@ fn Transactions() -> impl IntoView {
             </Show>
         </div>
 
-        <section class="panel list">
+        <section class="tx-list">
             <Show when=move || rows.with(|r| r.is_empty())>
                 <p class="empty">{move || match (only_open.get(), any_filter()) {
                     (true, false) => t!("Everything is categorised."),
