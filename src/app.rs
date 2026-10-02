@@ -37,6 +37,8 @@ struct Ctx {
     page: RwSignal<Page>,
     /// Shown after a rule is added, when this year has transactions it would change.
     rule_offer: RwSignal<Option<RuleOffer>>,
+    /// A year and Budget page row to open at (see `budget_row_id`), set from a report.
+    budget_focus: RwSignal<Option<(i32, String)>>,
 }
 
 #[derive(Clone)]
@@ -235,6 +237,7 @@ pub fn App() -> impl IntoView {
         month: RwSignal::new(today()[..7].to_string()),
         page: RwSignal::new(Page::Overview),
         rule_offer: RwSignal::new(None),
+        budget_focus: RwSignal::new(None),
     };
     provide_context(ctx);
     apply(ctx, api::get_data());
@@ -625,7 +628,7 @@ impl Report {
         match self {
             Report::Expenses => kind.is_expense(),
             Report::Income => kind.is_income(),
-            Report::Saldo | Report::Budget => kind.counts(),
+            Report::Saldo | Report::Budget | Report::Actuals => kind.counts(),
         }
     }
 }
@@ -753,6 +756,8 @@ enum Report {
     Saldo,
     /// The result per month against the budgeted result.
     Budget,
+    /// Per category what came in and went out each month, like the month budget.
+    Actuals,
 }
 
 /// Trends through a year: expenses, income or the net, one bar per month, over the
@@ -773,7 +778,7 @@ fn ReportsPage() -> impl IntoView {
     let series = move || match report.get() {
         Report::Expenses => ReportSeries::ExpensesTotal,
         Report::Income => ReportSeries::IncomeTotal,
-        Report::Saldo | Report::Budget => ReportSeries::Saldo,
+        Report::Saldo | Report::Budget | Report::Actuals => ReportSeries::Saldo,
     };
     let this_month_c = this_month.clone();
     let points = Signal::derive(move || {
@@ -806,7 +811,7 @@ fn ReportsPage() -> impl IntoView {
     let tone = Signal::derive(move || match report.get() {
         Report::Expenses => crate::charts::Tone::Expense,
         Report::Income => crate::charts::Tone::Income,
-        Report::Saldo | Report::Budget => crate::charts::Tone::Signed,
+        Report::Saldo | Report::Budget | Report::Actuals => crate::charts::Tone::Signed,
     });
     let label = Signal::derive(move || {
         let r = report.get();
@@ -816,9 +821,10 @@ fn ReportsPage() -> impl IntoView {
             Report::Expenses => t!("Expenses"),
             Report::Income => t!("Income"),
             Report::Budget => t!("Result against the month budget"),
+            Report::Actuals => t!("Per category"),
         };
         match (r, sel) {
-            (Report::Saldo | Report::Budget, _) => name.to_string(),
+            (Report::Saldo | Report::Budget | Report::Actuals, _) => name.to_string(),
             (_, s) => format!("{name} · {}", s.unwrap_or_else(|| t!("total").into())),
         }
     });
@@ -853,13 +859,22 @@ fn ReportsPage() -> impl IntoView {
     // The chart's months as CSV in Downloads: semicolons and decimal commas, as Dutch
     // spreadsheets read them; months still to come are left empty.
     let exported = RwSignal::new(None::<String>);
+    let actuals = Memo::new(move |_| {
+        let y = year.get();
+        ctx.data.with(|d| actual_table(d, y))
+    });
     let export_csv = move |_| {
         let name = format!("Fin {} {}", label.get_untracked(), year.get_untracked());
-        let mut csv = format!("{};{}\n", t!("Month"), label.get_untracked());
-        for p in points.get_untracked() {
-            let amount = p.cents.map(|c| format!("{}{},{:02}", if c < 0 { "-" } else { "" }, c.abs() / 100, c.abs() % 100)).unwrap_or_default();
-            csv.push_str(&format!("{};{}\n", month_label(&p.month), amount));
-        }
+        let csv = if report.get_untracked() == Report::Actuals {
+            actuals.with_untracked(actual_table_csv)
+        } else {
+            let mut csv = format!("{};{}\n", t!("Month"), label.get_untracked());
+            for p in points.get_untracked() {
+                let amount = p.cents.map(|c| format!("{}{},{:02}", if c < 0 { "-" } else { "" }, c.abs() / 100, c.abs() % 100)).unwrap_or_default();
+                csv.push_str(&format!("{};{}\n", month_label(&p.month), amount));
+            }
+            csv
+        };
         spawn_local(async move {
             match api::export_csv(name, csv).await {
                 Ok(path) => exported.set(Some(t!("Saved: {}", path))),
@@ -882,13 +897,18 @@ fn ReportsPage() -> impl IntoView {
                 <button class:on=move || tab_on(Report::Expenses) aria-pressed=move || tab_on(Report::Expenses).to_string() on:click=move |_| pick_report(Report::Expenses)>{t!("Expenses")}</button>
                 <button class:on=move || tab_on(Report::Income) aria-pressed=move || tab_on(Report::Income).to_string() on:click=move |_| pick_report(Report::Income)>{t!("Income")}</button>
                 <button class:on=move || tab_on(Report::Budget) aria-pressed=move || tab_on(Report::Budget).to_string() on:click=move |_| pick_report(Report::Budget)>{t!("Budget")}</button>
+                <button class:on=move || tab_on(Report::Actuals) aria-pressed=move || tab_on(Report::Actuals).to_string() on:click=move |_| pick_report(Report::Actuals)>{t!("Per category")}</button>
             </div>
-            // The budget report has no category or channel to filter on.
-            <Show when=move || !tab_on(Report::Budget)>
+            // The budget reports have no category or channel to filter on.
+            <Show when=move || !tab_on(Report::Budget) && !tab_on(Report::Actuals)>
                 <CategoryFilter exclude=exclude report=report/>
                 <ChannelSelect channel=channel/>
             </Show>
         </div>
+        <Show when=move || tab_on(Report::Actuals)>
+            <ActualsReport year=year table=actuals/>
+        </Show>
+        <Show when=move || !tab_on(Report::Actuals)>
         <Show when=move || !tab_on(Report::Budget)>
         <section class="panel totals report-totals">
             <span></span>
@@ -928,6 +948,7 @@ fn ReportsPage() -> impl IntoView {
                 </tbody>
             </table>
         </details>
+        </Show>
     }
 }
 
@@ -2324,6 +2345,292 @@ fn budget_groups(ds: &Dataset, scope: BudgetScope) -> Vec<(String, Vec<Category>
         .collect()
 }
 
+/// The element id of a Budget page row: a category's, or a group's variable budget
+/// (`cat` None).
+fn budget_row_id(cat: Option<&Category>, group: &str) -> String {
+    match cat {
+        Some(c) => format!("budget-row-{}", c.id),
+        None => format!("budget-row-group-{group}"),
+    }
+}
+
+/// One row of the per-category report: what a month budget row actually came to.
+#[derive(Clone, PartialEq)]
+struct ActualRow {
+    name: String,
+    /// For the badge and the tint; None for the money still to categorise.
+    cat: Option<Category>,
+    group_row: bool,
+    /// Its Budget page row (`budget_row_id`); None for the money still to categorise.
+    target: Option<String>,
+    /// Over budget is only a problem for costs.
+    expense: bool,
+    /// Per month, positive (spent, received); None for months still to come.
+    actual: Vec<Option<i64>>,
+    /// Per month.
+    budget: Vec<Option<i64>>,
+}
+
+/// The per-category report of a year, laid out like the month budget.
+#[derive(Clone, PartialEq)]
+struct ActualTable {
+    /// Per group and kind, like `budget_groups`: (title, kind, rows).
+    blocks: Vec<(String, CategoryKind, Vec<ActualRow>)>,
+    /// Fixed income, fixed costs, variable per month, as in the budget report: fixed
+    /// income counts categorised income only, variable counts what is still to
+    /// categorise.
+    totals: [Vec<Option<i64>>; 3],
+    /// The month budget's fixed income, fixed costs and variable per month.
+    budget_totals: [Vec<i64>; 3],
+    /// The months the average is over: the complete ones, from January.
+    complete: usize,
+    /// The month whose budget the Budget column shows: this month in this year,
+    /// December of a past year, January of one to come.
+    budget_idx: usize,
+}
+
+impl ActualRow {
+    fn average(&self, complete: usize) -> Option<i64> {
+        average_of(&self.actual, complete)
+    }
+
+    /// Over its budget in month `i`, beyond the 2% that counts as on budget.
+    fn over(&self, i: usize) -> bool {
+        match (self.actual[i], self.budget[i]) {
+            (Some(a), Some(b)) => self.expense && a > b && !within_tolerance(b - a, b),
+            _ => false,
+        }
+    }
+}
+
+/// The average of the first `complete` months; None without a complete month.
+fn average_of(values: &[Option<i64>], complete: usize) -> Option<i64> {
+    (complete > 0).then(|| values.iter().take(complete).map(|v| v.unwrap_or(0)).sum::<i64>() / complete as i64)
+}
+
+fn actual_table(d: &Dataset, year: i32) -> ActualTable {
+    let now = today();
+    let this_month = &now[..7];
+    let months: Vec<String> = (1..=12).map(|m| format!("{year:04}-{m:02}")).collect();
+    let overviews: Vec<Option<BudgetOverview>> =
+        months.iter().map(|m| (m.as_str() <= this_month).then(|| d.budget_overview(m))).collect();
+    let budgets: Vec<BudgetOverview> = months.iter().map(|m| d.budget_overview(m)).collect();
+    // What the lines `keep` accepts came to, per month.
+    let actual = |keep: &dyn Fn(&BudgetLine) -> bool| -> Vec<Option<i64>> {
+        overviews
+            .iter()
+            .map(|o| o.as_ref().map(|o| o.income.iter().chain(&o.fixed).chain(&o.variable).filter(|l| keep(l)).map(|l| l.actual_cents).sum()))
+            .collect()
+    };
+    let unsorted = |l: &BudgetLine| l.kind == CategoryKind::Variable && l.category_id.as_deref().is_none_or(|id| id == UNSORTED_CATEGORY_ID);
+    let mut blocks: Vec<(String, CategoryKind, Vec<ActualRow>)> = budget_groups(d, BudgetScope::Month)
+        .into_iter()
+        .filter_map(|(group, cats)| {
+            let kind = cats.first()?.kind;
+            let rows = if kind == CategoryKind::Variable {
+                // Variable costs are budgeted per group: one row for the group.
+                let inside = |l: &BudgetLine| {
+                    l.kind == CategoryKind::Variable
+                        && d.category(l.category_id.as_deref()).is_some_and(|c| !c.disabled && c.group == group && c.id != UNSORTED_CATEGORY_ID)
+                };
+                vec![ActualRow {
+                    name: group.clone(),
+                    cat: cats.first().cloned(),
+                    group_row: true,
+                    target: Some(budget_row_id(None, &group)),
+                    expense: true,
+                    actual: actual(&inside),
+                    budget: months.iter().map(|m| d.group_budget_for(&group, kind, m)).collect(),
+                }]
+            } else {
+                cats.iter()
+                    .map(|c| ActualRow {
+                        name: c.name.clone(),
+                        cat: Some(c.clone()),
+                        group_row: false,
+                        target: Some(budget_row_id(Some(c), "")),
+                        expense: c.kind.is_expense(),
+                        actual: actual(&|l: &BudgetLine| l.category_id.as_deref() == Some(c.id.as_str())),
+                        budget: months.iter().map(|m| d.budget_for(&c.id, m)).collect(),
+                    })
+                    .collect()
+            };
+            let title = if group.is_empty() { t!("No group").to_string() } else { group };
+            Some((title, kind, rows))
+        })
+        .collect();
+    // Spending still to categorise counts as variable, so the rows add up to the totals.
+    let to_sort = actual(&unsorted);
+    if to_sort.iter().any(|v| v.is_some_and(|c| c != 0)) {
+        let row = ActualRow {
+            name: t!("To categorise").to_string(),
+            cat: None,
+            group_row: false,
+            target: None,
+            expense: true,
+            actual: to_sort,
+            budget: vec![None; 12],
+        };
+        blocks.push((t!("To categorise").to_string(), CategoryKind::Variable, vec![row]));
+    }
+    let fixed_income = |l: &BudgetLine| l.kind == CategoryKind::Income && l.category_id.is_some();
+    let totals = [
+        actual(&fixed_income),
+        overviews.iter().map(|o| o.as_ref().map(|o| o.actual.fixed)).collect(),
+        overviews.iter().map(|o| o.as_ref().map(|o| o.actual.variable)).collect(),
+    ];
+    let budget_totals = [
+        budgets.iter().map(|o| o.income.iter().filter(|l| fixed_income(l)).filter_map(|l| l.budget_cents).sum()).collect(),
+        budgets.iter().map(|o| o.budget.fixed).collect(),
+        budgets.iter().map(|o| o.budget.variable).collect(),
+    ];
+    let this_year: i32 = now[..4].parse().unwrap_or(year);
+    let budget_idx = match year.cmp(&this_year) {
+        std::cmp::Ordering::Less => 11,
+        std::cmp::Ordering::Greater => 0,
+        std::cmp::Ordering::Equal => now[5..7].parse::<usize>().unwrap_or(1).clamp(1, 12) - 1,
+    };
+    ActualTable { blocks, totals, budget_totals, complete: complete_months(year), budget_idx }
+}
+
+/// The per-category report as CSV: semicolons and decimal commas, like the chart's
+/// export; months still to come are left empty.
+fn actual_table_csv(t: &ActualTable) -> String {
+    let amount = |c: Option<i64>| {
+        c.map(|c| format!("{}{},{:02}", if c < 0 { "-" } else { "" }, c.abs() / 100, c.abs() % 100)).unwrap_or_default()
+    };
+    let mut csv = t!("Category").to_string();
+    for i in 0..12 {
+        csv.push_str(&format!(";{}", i18n::month_short(i)));
+    }
+    csv.push_str(&format!(";{};{}\n", t!("Average"), t!("Budget {}", i18n::month_short(t.budget_idx))));
+    let mut line = |name: &str, values: &[Option<i64>], budget: Option<i64>| {
+        csv.push_str(name);
+        for v in values {
+            csv.push(';');
+            csv.push_str(&amount(*v));
+        }
+        csv.push_str(&format!(";{};{}\n", amount(average_of(values, t.complete)), amount(budget)));
+    };
+    for (i, name) in [t!("Fixed income"), t!("Fixed costs"), t!("Variable")].into_iter().enumerate() {
+        line(name, &t.totals[i], Some(t.budget_totals[i][t.budget_idx]));
+    }
+    for (_, _, rows) in &t.blocks {
+        for r in rows {
+            line(&r.name, &r.actual, r.budget[t.budget_idx]);
+        }
+    }
+    csv
+}
+
+/// Per category what actually came in and went out each month, in the month budget's
+/// rows, with the average of the complete months next to the budget: where the budget
+/// is off. A row's name opens it on the Budget page.
+#[component]
+fn ActualsReport(year: RwSignal<i32>, table: Memo<ActualTable>) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let (this_year, this_idx): (i32, usize) = {
+        let t = today();
+        (t[..4].parse().unwrap_or(2026), t[5..7].parse::<usize>().unwrap_or(1) - 1)
+    };
+    let is_current = move |i: usize| year.get() == this_year && i == this_idx;
+    let amount = |v: Option<i64>| match v {
+        None => String::new(),
+        Some(0) => "–".into(),
+        Some(c) => budget_text(fin_shared::whole_euros(c)),
+    };
+    let open = move |target: String| {
+        ctx.budget_focus.set(Some((year.get_untracked(), target)));
+        ctx.page.set(Page::Budget);
+    };
+    // A summary row: the actuals, their average and the month budget's.
+    let summary_row = move |t: &ActualTable, label: &'static str, values: Vec<Option<i64>>, budget: Vec<i64>, class: &'static str| {
+        let result = class == "result";
+        let avg = average_of(&values, t.complete);
+        let avg_over = result && avg.is_some_and(|a| a < budget[t.budget_idx]);
+        view! {
+            <div class=format!("budget-row total {class}")>
+                <span>{label}</span>
+                {values.iter().enumerate().map(|(i, v)| view! {
+                    <span class="right" class:current=is_current(i) class:over=result && v.is_some_and(|c| c < budget[i])>
+                        {v.map(|c| euro_text(fin_shared::whole_euros(c))).unwrap_or_default()}
+                    </span>
+                }).collect_view()}
+                <span class="right avg" class:over=avg_over>{avg.map(|c| euro_text(fin_shared::whole_euros(c))).unwrap_or_else(|| "–".into())}</span>
+                <span class="right budget-col">{euro_text(budget[t.budget_idx])}</span>
+            </div>
+        }
+    };
+    view! {
+        <p class="hint">{t!("What actually came in and went out, in the rows of the month budget. The average is over the complete months, next to the budget. Click a category to change its budget.")}</p>
+        <section class="panel budget actuals">
+            {move || table.with(|t| {
+                let neg = |v: &Vec<Option<i64>>| v.iter().map(|c| c.map(|c| -c)).collect::<Vec<_>>();
+                let result: Vec<Option<i64>> = (0..12)
+                    .map(|i| t.totals[0][i].map(|inc| inc - t.totals[1][i].unwrap_or(0) - t.totals[2][i].unwrap_or(0)))
+                    .collect();
+                let result_budget: Vec<i64> = (0..12).map(|i| t.budget_totals[0][i] - t.budget_totals[1][i] - t.budget_totals[2][i]).collect();
+                let negb = |v: &Vec<i64>| v.iter().map(|c| -c).collect::<Vec<_>>();
+                let complete = t.complete;
+                let budget_idx = t.budget_idx;
+                let avg_title = tn!(complete, "Average of {} complete month", "Average of {} complete months", complete);
+                view! {
+                    <div class="budget-row head">
+                        <span>{t!("Category")}</span>
+                        {(0..12).map(|i| view! { <span class="right col-head" class:current=is_current(i)>{i18n::month_short(i)}</span> }).collect_view()}
+                        <span class="right col-head strong" title=avg_title>{t!("Average")}</span>
+                        <span class="right col-head strong">{t!("Budget {}", i18n::month_short(budget_idx))}</span>
+                    </div>
+                    <div class="budget-summary">
+                        {summary_row(t, t!("Fixed income"), t.totals[0].clone(), t.budget_totals[0].clone(), "income")}
+                        {summary_row(t, t!("Fixed costs"), neg(&t.totals[1]), negb(&t.budget_totals[1]), "")}
+                        {summary_row(t, t!("Variable"), neg(&t.totals[2]), negb(&t.budget_totals[2]), "")}
+                        {summary_row(t, t!("Result"), result, result_budget, "result")}
+                    </div>
+                    {t.blocks.iter().map(|(title, kind, rows)| {
+                        let rows = rows.iter().map(|r| {
+                            let avg = r.average(complete);
+                            let budget = r.budget[budget_idx];
+                            let avg_over = r.expense && matches!((avg, budget), (Some(a), Some(b)) if a > b && !within_tolerance(b - a, b));
+                            let name = view! {
+                                {cat_badge(r.cat.as_ref())}
+                                {if r.group_row {
+                                    view! { <span class="group-label"><span>{r.name.clone()}</span><span class="badge">{t!("Group")}</span></span> }.into_any()
+                                } else {
+                                    view! { <span>{r.name.clone()}</span> }.into_any()
+                                }}
+                            };
+                            let name = match r.target.clone() {
+                                Some(target) => view! {
+                                    <button class="budget-name row-link" title=t!("Change the budget of {}", r.name) on:click=move |_| open(target.clone())>{name}</button>
+                                }.into_any(),
+                                None => view! { <span class="budget-name" title=r.name.clone()>{name}</span> }.into_any(),
+                            };
+                            view! {
+                                <div class=format!("budget-row tinted {}", cat_tone(r.cat.as_ref())) class:group-budget=r.group_row>
+                                    {name}
+                                    {(0..12).map(|i| view! {
+                                        <span class="actual-cell" class:current=is_current(i) class:over=r.over(i) class:none=r.actual[i] == Some(0)>
+                                            {amount(r.actual[i])}
+                                        </span>
+                                    }).collect_view()}
+                                    <span class="actual-cell avg" class:over=avg_over>{avg.map(|c| budget_text(fin_shared::whole_euros(c))).unwrap_or_else(|| "–".into())}</span>
+                                    <span class="actual-cell budget-col">{budget.map(budget_text).unwrap_or_else(|| "–".into())}</span>
+                                </div>
+                            }
+                        }).collect_view();
+                        let kind = *kind;
+                        view! {
+                            <div class="budget-group">{title.clone()}<span class="muted">" · "{kind_label(kind)}</span></div>
+                            {rows}
+                        }
+                    }).collect_view()}
+                }
+            })}
+        </section>
+    }
+}
+
 /// The budget: the grid where budgets are set up, per month for a year. The month
 /// budget holds what comes back every month; the year budget adds extra income and
 /// investments, in the month they come, with the year's total per row. How the month
@@ -2331,7 +2638,29 @@ fn budget_groups(ds: &Dataset, scope: BudgetScope) -> Vec<(String, Vec<Category>
 #[component]
 fn BudgetPage() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    let year = RwSignal::new(ctx.month.get_untracked()[..4].parse::<i32>().unwrap_or(2026));
+    let focus = ctx.budget_focus.get_untracked();
+    ctx.budget_focus.set(None);
+    let year = RwSignal::new(match &focus {
+        Some((y, _)) => *y,
+        None => ctx.month.get_untracked()[..4].parse::<i32>().unwrap_or(2026),
+    });
+    // Opened from a report's row: scroll to that row once it is drawn and put the
+    // cursor in its current month (or its first).
+    if let Some((_, id)) = focus {
+        set_timeout(
+            move || {
+                let Some(row) = document().get_element_by_id(&id) else { return };
+                let opts = web_sys::ScrollIntoViewOptions::new();
+                opts.set_block(web_sys::ScrollLogicalPosition::Center);
+                row.scroll_into_view_with_scroll_into_view_options(&opts);
+                let input = row.query_selector("input.current").ok().flatten().or_else(|| row.query_selector("input").ok().flatten());
+                if let Some(el) = input.and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
+                    let _ = el.focus();
+                }
+            },
+            std::time::Duration::from_millis(50),
+        );
+    }
     let notice = RwSignal::new(None::<String>);
     let scope = RwSignal::new(BudgetScope::Month);
     let is_year = move || scope.get() == BudgetScope::Year;
@@ -2704,7 +3033,7 @@ fn BudgetPage() -> impl IntoView {
                         view! {
                             // Like a category row: the group's colour, icon and name, with a
                             // badge saying it is the group's budget.
-                            <div class=format!("budget-row tinted group-budget {}", cat_tone(cats.first()))>
+                            <div id=budget_row_id(None, &group) class=format!("budget-row tinted group-budget {}", cat_tone(cats.first()))>
                                 <span class="budget-name" title=format!("{}: {names}", tn!(n, "{} category", "{} categories", n))>
                                     {cat_badge(cats.first())}
                                     <span class="group-label"><span>{group.clone()}</span><span class="badge">{t!("Group")}</span></span>
@@ -2717,7 +3046,7 @@ fn BudgetPage() -> impl IntoView {
                     } else {
                         cats.iter()
                             .map(|c| view! {
-                                <div class=format!("budget-row tinted {}", cat_tone(Some(c)))>
+                                <div id=budget_row_id(Some(c), "") class=format!("budget-row tinted {}", cat_tone(Some(c)))>
                                     <span class="budget-name" title=c.name.clone()>{cat_badge(Some(c))}<span>{c.name.clone()}</span></span>
                                     {(0..12).map(|i| cell(c, i)).collect_view()}
                                     {row_total(c.id.clone(), false)}

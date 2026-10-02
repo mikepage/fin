@@ -314,6 +314,17 @@ pub const UI: &[(&str, &str)] = &[
     // Reports: budget, CSV
     ("Result against the month budget", "Resultaat t.o.v. maandbegroting"),
     ("Per complete month: up is better than budgeted, down worse", "Per hele maand: omhoog is beter dan begroot, omlaag slechter"),
+    // Reports: per category
+    ("Per category", "Per categorie"),
+    ("Average", "Gemiddeld"),
+    ("Budget {}", "Budget {}"),
+    ("Average of {} complete month", "Gemiddelde van {} hele maand"),
+    ("Average of {} complete months", "Gemiddelde van {} hele maanden"),
+    ("Change the budget of {}", "Budget van {} aanpassen"),
+    (
+        "What actually came in and went out, in the rows of the month budget. The average is over the complete months, next to the budget. Click a category to change its budget.",
+        "Wat er werkelijk binnenkwam en uitging, in de rijen van de maandbegroting. Het gemiddelde is over de hele maanden, naast het budget. Klik een categorie om het budget aan te passen.",
+    ),
     ("Export CSV", "Exporteer CSV"),
     ("Save this report's months as a CSV file in Downloads", "Bewaar de maanden van dit rapport als CSV-bestand in Downloads"),
     ("Saved: {}", "Bewaard: {}"),

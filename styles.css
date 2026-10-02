@@ -390,6 +390,22 @@ label.check input { height: auto; }
 .budget-row.total .right { padding-right: 6px; white-space: nowrap; }
 .budget-row.total .current { color: var(--accent-strong); }
 
+/* The per-category report: the month budget's grid with what actually happened, then
+   the average and the budget. */
+.budget.actuals .budget-row { grid-template-columns: 170px repeat(12, minmax(54px, 1fr)) repeat(2, minmax(70px, 1.1fr)); min-width: 1060px; }
+.budget.actuals .col-head { padding-right: 6px; }
+.budget.actuals .col-head.current { color: var(--accent-strong); font-weight: 700; }
+.budget.actuals .col-head.strong { font-weight: 600; color: var(--text); }
+.actual-cell { height: 32px; line-height: 32px; padding: 0 6px; border-radius: 6px; text-align: right; font-size: 13px; white-space: nowrap; }
+.actual-cell.none { color: var(--faint); }
+.actual-cell.current { background: var(--sidebar); }
+.actual-cell.avg { font-weight: 600; }
+.actual-cell.avg, .budget-row .right.avg { border-left: 1px solid var(--line); }
+.actual-cell.budget-col { color: var(--muted); }
+.row-link { border: 0; background: transparent; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; height: auto; }
+.budget-row.tinted .row-link { padding-left: 6px; }
+.row-link:hover > span:last-child { text-decoration: underline; }
+
 /* Import & backup */
 .log-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line-soft); }
 .log-row.undone .log-main { opacity: 0.6; }

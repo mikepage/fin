@@ -6,6 +6,16 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-02
+
+### Added
+
+- **Per category** on Reports: per category what actually came in and went out each
+  month, in the month budget's rows (variable costs per group), with the average of
+  the complete months next to this month's budget. Months over budget and an average
+  above the budget are orange. A category's name opens its row on the Budget page.
+  Export CSV saves the whole grid.
+
 ## [2.3.2] - 2026-10-02
 
 ### Changed
