@@ -6,6 +6,13 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-10-02
+
+### Changed
+
+- A group budget's row shows the group's name with a "Group" badge instead of
+  "Group budget", in regular weight like the category rows.
+
 ## [2.3.1] - 2026-10-02
 
 ### Added
@@ -164,6 +171,7 @@ JSON file, no account, no network.
 - The app is not signed. On first launch, right-click Fin and choose Open, or run
   `xattr -dr com.apple.quarantine /Applications/Fin.app`.
 
+[2.3.2]: https://github.com/mikepage/fin/releases/tag/v2.3.2
 [2.3.1]: https://github.com/mikepage/fin/releases/tag/v2.3.1
 [2.3.0]: https://github.com/mikepage/fin/releases/tag/v2.3.0
 [2.2.0]: https://github.com/mikepage/fin/releases/tag/v2.2.0

@@ -301,7 +301,6 @@ pub const UI: &[(&str, &str)] = &[
     ),
     ("Copy {} to {}", "{} naar {} kopiëren"),
     ("Fixed income", "Vaste inkomsten"),
-    ("Group budget", "Groepsbudget"),
     ("Month budget", "Maandbegroting"),
     ("Year budget", "Jaarbegroting"),
     (

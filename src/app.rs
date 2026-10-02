@@ -2702,10 +2702,12 @@ fn BudgetPage() -> impl IntoView {
                         let n = cats.len();
                         let names = cats.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ");
                         view! {
-                            // In the group's colour and with its icon, like the category rows.
+                            // Like a category row: the group's colour, icon and name, with a
+                            // badge saying it is the group's budget.
                             <div class=format!("budget-row tinted group-budget {}", cat_tone(cats.first()))>
                                 <span class="budget-name" title=format!("{}: {names}", tn!(n, "{} category", "{} categories", n))>
-                                    {cat_badge(cats.first())}<span>{t!("Group budget")}</span>
+                                    {cat_badge(cats.first())}
+                                    <span class="group-label"><span>{group.clone()}</span><span class="badge">{t!("Group")}</span></span>
                                 </span>
                                 {(0..12).map(|i| group_cell(group.clone(), names.clone(), i)).collect_view()}
                                 {row_total(group.clone(), true)}

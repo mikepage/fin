@@ -856,9 +856,9 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
 .bc-row.sub .bc-before { bottom: 1px; height: 3px; }
 .bc-row.sub .bc-value { font-size: 13px; }
 /* The group budget rows on the Budget page. */
-.budget-row.group-budget .budget-name { padding-left: 6px; font-weight: 600; font-size: 13px; }
-.budget-row.group-budget .budget-name .muted { font-weight: 400; }
-.budget-row.group-budget .budget-cell { font-weight: 600; }
+.budget-row.group-budget .group-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.budget-row.group-budget .group-label > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.budget-row.group-budget .group-label .badge { flex-shrink: 0; font-weight: 500; }
 
 /* Forecast: lighter bars for months to come, and the running total through the year */
 .chart .bar.forecast { opacity: 0.35; }
