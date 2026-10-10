@@ -2049,6 +2049,7 @@ fn cat_badge(cat: Option<&Category>) -> impl IntoView {
         (_, Some(g::INCOME)) | (Some(CategoryKind::Income), None) => "M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11",
         (_, Some(g::HOUSING)) => "M2 7.5 8 2.5l6 5M3.5 6.5v7h9v-7M6.5 13.5v-4h3v4",
         (_, Some(g::HOUSEHOLD)) => "M1.5 2.5h2l1.5 8h7.5l1.5-5.5H4.3M6 13.5h.01M12 13.5h.01",
+        (_, Some(g::SHOPPING)) => "M3 5h10l-.8 9H3.8zM5.5 5V4a2.5 2.5 0 0 1 5 0v1",
         (_, Some(g::MEDICAL)) => "M6.2 2.5h3.6v3.7h3.7v3.6H9.8v3.7H6.2V9.8H2.5V6.2h3.7z",
         (_, Some(g::INSURANCE)) => "M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.2C4.9 13.4 2.5 11.2 2.5 8V4z",
         (_, Some(g::TELECOM)) => "M5 1.5h6a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1zM7 12.5h2",

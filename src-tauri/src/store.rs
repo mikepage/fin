@@ -1666,6 +1666,16 @@ mod tests {
     }
 
     #[test]
+    fn shopping_moves_to_its_own_group() {
+        // Older files had Shopping under Household; loading moves it to its own group.
+        let mut ds = default_dataset();
+        ds.categories.iter_mut().find(|c| c.id == ids::SHOPPING).unwrap().group = "Huishouden".into();
+        ensure_system_categories(&mut ds);
+        assert_eq!(ds.category(Some(ids::SHOPPING)).unwrap().group, "Winkelen");
+        assert_eq!(ds.category(Some(ids::GROCERIES)).unwrap().group, "Huishouden");
+    }
+
+    #[test]
     fn copy_budgets_from_previous_year_does_not_overwrite() {
         let mut ds = default_dataset();
         let (a, b) = (ids::RENT_MORTGAGE.to_string(), ids::INTERNET.to_string());

@@ -6,6 +6,14 @@ All notable changes to Fin are listed here. The format follows
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-10
+
+### Changed
+
+- **Shopping** is its own group, out of Household, so it gets its own budget. Existing
+  files move it on load; Household's budget stays as it was, so lower it by what
+  Shopping gets.
+
 ## [2.4.1] - 2026-10-02
 
 ### Changed

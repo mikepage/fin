@@ -9,6 +9,7 @@ pub mod groups {
     pub const INCOME: &str = "income";
     pub const HOUSING: &str = "housing";
     pub const HOUSEHOLD: &str = "household";
+    pub const SHOPPING: &str = "shopping";
     pub const MEDICAL: &str = "medical";
     pub const INSURANCE: &str = "insurance";
     pub const FINANCES: &str = "finances";
@@ -55,6 +56,7 @@ pub mod ids {
     pub const HOUSEHOLD_OTHER: &str = "sys-household_other";
     pub const PERSONAL_CARE: &str = "sys-personal_care";
     pub const CHARITY: &str = "sys-charity";
+    // Shopping (its own group, so it gets its own budget)
     pub const SHOPPING: &str = "sys-shopping";
     // Medical
     pub const DEDUCTIBLE: &str = "sys-deductible";
@@ -139,7 +141,7 @@ pub const CATALOG: &[(&str, &str, CategoryKind)] = &[
     (HOUSEHOLD_OTHER, g::HOUSEHOLD, V),
     (PERSONAL_CARE, g::HOUSEHOLD, V),
     (CHARITY, g::HOUSEHOLD, V),
-    (SHOPPING, g::HOUSEHOLD, V),
+    (SHOPPING, g::SHOPPING, V),
     (DEDUCTIBLE, g::MEDICAL, V),
     (MEDICAL_OTHER, g::MEDICAL, V),
     (INSURANCE, g::INSURANCE, F),
