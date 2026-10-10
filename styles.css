@@ -676,6 +676,7 @@ button.danger { background: var(--neg); border-color: var(--neg); color: #ffffff
 .t-income { --hue: 150; }
 .t-housing { --hue: 212; }
 .t-household { --hue: 42; }
+.t-shopping { --hue: 128; }
 .t-medical { --hue: 355; }
 .t-insurance { --hue: 182; }
 .t-telecom { --hue: 262; }
